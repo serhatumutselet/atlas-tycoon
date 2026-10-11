@@ -334,6 +334,7 @@
       case 'turn': {
         const p = evt.player;
         board.active = p.id;
+        board.clearTarget();
         if (board.autoCam) board.overview();
         renderHud();
         if (!promptState) setStatus(`<p class="wait"><span class="pawn-dot" style="--pc:${p.color}"></span><span>${t('turnOf', { p: `<b>${esc(p.name)}</b>` })}</span></p>`);
@@ -342,8 +343,29 @@
         await banner;
         break;
       }
-      case 'dice': board.follow(evt.player.id); await rollDice(evt.dice); break;
-      case 'move': board.follow(evt.player.id); await board.animateMove(evt.player.id, evt.path, evt.jump); renderHud(); break;
+      case 'dice': {
+        const p = evt.player;
+        board.follow(p.id);
+        // On the island only doubles move the pawn.
+        const moves = !p.islandTurns || evt.dice[0] === evt.dice[1];
+        if (moves) board.setTarget((p.pos + evt.dice[0] + evt.dice[1]) % D.TILES.length, p.color, p.id, p.pos);
+        await rollDice(evt.dice);
+        break;
+      }
+      case 'move': {
+        board.follow(evt.player.id);
+        // Keep the rolled target while the pawn is still on its way (a move is split at Departure);
+        // card, island and airship moves get their own destination.
+        const dest = evt.path[evt.path.length - 1];
+        const n = D.TILES.length, tg = board.target;
+        const fwd = (a, b) => (b - a + n) % n;
+        const onRoute = tg && tg.pid === evt.player.id && tg.from != null && !evt.jump && fwd(tg.from, dest) <= fwd(tg.from, tg.id);
+        if (!onRoute) board.setTarget(dest, evt.player.color, evt.player.id, null);
+        await board.animateMove(evt.player.id, evt.path, evt.jump);
+        if (board.target && board.target.id === dest) board.clearTarget(900);
+        renderHud();
+        break;
+      }
       case 'money':
         renderHud();
         board.floatText(evt.player.id, (evt.delta > 0 ? '+' : '−') + fmt(Math.abs(evt.delta)), evt.delta > 0 ? '#1f9d55' : '#d93a2b');

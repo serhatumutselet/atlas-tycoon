@@ -147,6 +147,18 @@
 
     setPickable(ids) { this.pick = ids ? new Set(ids) : null; }
 
+    // Destination highlight: the tile a pawn is heading to rises, grows and glows in the player's colour.
+    setTarget(tileId, color, pid, from) {
+      this.target = { id: tileId, color, pid, from, t0: performance.now() };
+    }
+
+    clearTarget(delay) {
+      const tg = this.target;
+      if (!tg) return;
+      if (!delay) { this.target = null; return; }
+      setTimeout(() => { if (this.target === tg) this.target = null; }, delay);
+    }
+
     flash(tileId, ms) {
       this.flashId = tileId;
       setTimeout(() => { if (this.flashId === tileId) this.flashId = -1; }, ms || 600);
@@ -648,7 +660,10 @@
     drawTile(t, objects) {
       const g = this.game;
       const { x, y } = CELLS[t.id];
-      const x0 = x + GAP, y0 = y + GAP, x1 = x + 1 - GAP, y1 = y + 1 - GAP;
+      const tg = this.target && this.target.id === t.id ? this.target : null;
+      // The destination tile eases up to 10% larger.
+      const grow = tg ? 0.06 * ease(Math.min(1, (this.now - tg.t0) / 400)) : 0;
+      const x0 = x + GAP - grow, y0 = y + GAP - grow, x1 = x + 1 - GAP + grow, y1 = y + 1 - GAP + grow;
       const owner = t.owner >= 0 ? g.players[t.owner] : null;
       let top = CORNER_TOP[t.type] || '#fffaf0';
       let sideL = '#e8dcc3', sideR = '#d2c2a2';
@@ -661,6 +676,7 @@
       let lift = 0;
       if (this.pick && this.pick.has(t.id)) lift = 0.06 + Math.sin(this.now / 180) * 0.04;
       if (this.flashId === t.id) lift = 0.12;
+      if (tg) lift = (0.1 + Math.sin(this.now / 220) * 0.03) * Math.min(1, (this.now - tg.t0) / 400);
       this.box(x0, y0, x1, y1, 0, TILE_Z + lift, top, sideL, sideR, 'rgba(60,40,20,0.25)');
       const z = TILE_Z + lift;
       const P = this.P.bind(this);
@@ -689,8 +705,29 @@
         this.poly([P(x0, y0, z), P(x1, y0, z), P(x1, y1, z), P(x0, y1, z)], null, `rgba(255,214,80,${a})`, 3);
       }
       const d = x + y;
+      if (tg) objects.push({ d: d + 0.4, f: () => this.drawTargetGlow(tg, x0, y0, x1, y1, z) });
       objects.push({ d: d + 0.45, f: () => this.drawProp(t, x + 0.5, y + 0.5, z) });
       objects.push({ d: d + 0.95, f: () => this.drawLabel(t, x + 0.5, y + 0.5, z) });
+    }
+
+    drawTargetGlow(tg, x0, y0, x1, y1, z) {
+      const c = this.ctx;
+      const P = this.P.bind(this);
+      const pulse = 0.5 + Math.sin(this.now / 200) * 0.5;
+      const ring = (e) => [P(x0 - e, y0 - e, z), P(x1 + e, y0 - e, z), P(x1 + e, y1 + e, z), P(x0 - e, y1 + e, z)];
+      c.save();
+      // Soft coloured fill and a glowing rim.
+      this.poly(ring(0), `${tg.color}33`);
+      c.shadowColor = tg.color;
+      c.shadowBlur = this.TW * (0.2 + pulse * 0.15);
+      this.poly(ring(0.02), null, tg.color, Math.max(2.5, this.TW * 0.035));
+      c.shadowBlur = 0;
+      this.poly(ring(0.02), null, 'rgba(255,255,255,0.85)', Math.max(1, this.TW * 0.01));
+      // A ring that keeps expanding outwards and fading.
+      const k = ((this.now - tg.t0) / 900) % 1;
+      c.globalAlpha = 1 - k;
+      this.poly(ring(0.04 + k * 0.22), null, tg.color, Math.max(1.5, this.TW * 0.02));
+      c.restore();
     }
 
     drawProp(t, cx, cy, z) {
