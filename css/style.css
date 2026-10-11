@@ -121,7 +121,7 @@ input, select {
   width: 42px; height: 42px; border-radius: 14px; border: 0; background: var(--panel); color: var(--ink); cursor: pointer;
   display: grid; place-items: center; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12); backdrop-filter: blur(10px);
 }
-.icon-btn[aria-expanded='true'] { background: var(--sun); color: #2b1d00; }
+.icon-btn[aria-expanded='true'], .icon-btn[aria-pressed='true'] { background: var(--sun); color: #2b1d00; }
 .ticker {
   position: absolute; top: 74px; left: 50%; transform: translateX(-50%); max-width: min(560px, calc(100% - 32px));
   background: rgba(20, 26, 60, 0.6); color: #fff; padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 500;
@@ -238,7 +238,7 @@ input, select {
 .pick-text { text-align: center; font-weight: 500; }
 
 /* ---------- centre stage ---------- */
-.stage { position: absolute; inset: 0; display: grid; place-items: center; padding: 80px 16px 24px; pointer-events: none; z-index: 8; }
+.stage { position: absolute; inset: 0; display: grid; place-items: center; padding: max(80px, 24vh) 16px 24px; pointer-events: none; z-index: 8; }
 .stage::before { content: ""; position: absolute; inset: 0; background: radial-gradient(closest-side, rgba(10, 15, 40, 0.38), rgba(10, 15, 40, 0)); pointer-events: none; }
 .decide {
   position: relative; pointer-events: auto; width: min(400px, 100%); background: var(--panel-solid); border-radius: 26px;
@@ -346,7 +346,7 @@ input, select {
   .deed h2 { font-size: 28px; }
   .cube { --half: 32px; width: 64px; height: 64px; }
   .turn-banner { font-size: 24px; top: 18%; }
-  .stage { padding-top: 70px; }
+  .stage { padding-top: max(70px, 30vh); }
 }
 @media (prefers-reduced-motion: reduce) {
   .cube { transition: none; }

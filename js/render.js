@@ -58,6 +58,9 @@
       this.clouds = Array.from({ length: 6 }, (_, i) => ({ x: (i * 0.23) % 1, y: 0.06 + ((i * 37) % 70) / 100, s: 0.6 + (i % 3) * 0.35, v: 0.004 + (i % 4) * 0.002 }));
       this.fonts = { display: '"Lilita One", "Arial Rounded MT Bold", sans-serif', body: '"Outfit", system-ui, sans-serif' };
       this.cam = { z: 1, x: 0, y: 0 };
+      this.autoCam = true;
+      this.followId = -1;
+      this.camGoal = null;
       this.resize();
       new ResizeObserver(() => this.resize()).observe(canvas);
       this.bindCamera();
@@ -179,9 +182,11 @@
       const avail = this.H - padTop - padBottom;
       // Board extents in tile widths: 9.8 across, about 6.9 tall including sky-high landmarks and rock.
       // Board extents in tile widths: 9.8 across, about 6.9 tall including sky-high landmarks and rock.
-      const tw = Math.max(20, Math.min((this.W * 0.96) / 9.8, (avail * 0.97) / 6.9));
-      const total = 9.8 * tw / 2 + 3.2 * tw * 0.55;
-      this.base = { tw, ox: this.W / 2, oy: padTop + Math.max(0, (avail - total) / 2) + 1.3 * tw * 0.55 + 0.2 * tw };
+      // The diamond is 9.9 tiles across and 4.95 tile widths tall; leave a little headroom for
+      // landmarks and let the hanging rock run off the bottom of the screen.
+      const tw = Math.max(20, Math.min((this.W * 0.98) / 9.9, avail / 5.5));
+      const total = 5.5 * tw;
+      this.base = { tw, ox: this.W / 2, oy: padTop + Math.max(0, (avail - total) / 2) + 0.55 * tw + 0.225 * tw };
       this.applyCamera();
     }
 
@@ -190,14 +195,63 @@
       const b = this.base, cam = this.cam;
       const cx = this.W / 2, cy = this.H / 2;
       // Keep at least part of the board on screen.
-      const lim = 0.45 * this.W * cam.z;
+      const lim = 0.55 * this.W * cam.z;
       cam.x = Math.max(-lim, Math.min(lim, cam.x));
-      cam.y = Math.max(-0.45 * this.H * cam.z, Math.min(0.45 * this.H * cam.z, cam.y));
+      cam.y = Math.max(-0.55 * this.H * cam.z, Math.min(0.55 * this.H * cam.z, cam.y));
       this.TW = b.tw * cam.z;
       this.TH = this.TW / 2;
       this.ZS = this.TW * 0.55;
       this.ox = cx + (b.ox - cx) * cam.z + cam.x;
       this.oy = cy + (b.oy - cy) * cam.z + cam.y;
+    }
+
+    // ---------- automatic camera ----------
+    // follow(pid) eases in and keeps that pawn centred; overview() eases back to the whole board.
+    follow(pid) {
+      if (!this.autoCam) return;
+      this.followId = pid;
+      this.camGoal = 'follow';
+    }
+
+    overview() {
+      this.followId = -1;
+      this.camGoal = 'overview';
+    }
+
+    setAutoCam(on) {
+      this.autoCam = on;
+      this.overview();
+    }
+
+    // Any manual pan or zoom hands the camera to the player until the next follow().
+    stopAuto() {
+      this.camGoal = null;
+      this.followId = -1;
+    }
+
+    updateCamera(dt) {
+      if (!this.camGoal || !this.base) return;
+      const cam = this.cam, b = this.base;
+      let tz = 1, tx = 0, ty = 0;
+      const tk = this.tokens[this.followId];
+      if (this.camGoal === 'follow' && tk) {
+        tz = this.W < 640 ? 2.1 : 1.5;
+        const cx = this.W / 2, cy = this.H / 2;
+        const bx = b.ox + (tk.x - tk.y) * b.tw / 2;
+        const by = b.oy + (tk.x + tk.y) * b.tw / 4 - (TILE_Z + 0.4) * b.tw * 0.55;
+        tx = cx - cx - (bx - cx) * tz;
+        // Keep the pawn in the upper part of the screen so the decision card below it doesn't cover it.
+        ty = this.H * (this.W < 640 ? 0.25 : 0.3) - cy - (by - cy) * tz;
+      }
+      const k = this.reduced ? 1 : 1 - Math.exp(-Math.min(dt, 100) / 260);
+      cam.z += (tz - cam.z) * k;
+      cam.x += (tx - cam.x) * k;
+      cam.y += (ty - cam.y) * k;
+      if (this.camGoal === 'overview' && Math.abs(cam.z - 1) < 0.002 && Math.abs(cam.x) < 0.5 && Math.abs(cam.y) < 0.5) {
+        this.cam = { z: 1, x: 0, y: 0 };
+        this.camGoal = null;
+      }
+      this.applyCamera();
     }
 
     zoomAt(px, py, z) {
@@ -220,10 +274,11 @@
       const local = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
       cv.addEventListener('wheel', (e) => {
         e.preventDefault();
+        this.stopAuto();
         const [x, y] = local(e);
         this.zoomAt(x, y, this.cam.z * Math.exp(-e.deltaY * 0.0015));
       }, { passive: false });
-      cv.addEventListener('dblclick', () => { this.cam = { z: 1, x: 0, y: 0 }; this.applyCamera(); });
+      cv.addEventListener('dblclick', () => this.overview());
       cv.addEventListener('pointerdown', (e) => {
         pts.set(e.pointerId, local(e));
         this.dragged = false;
@@ -237,6 +292,7 @@
         if (pts.size === 2 && b && b0) {
           // Pinch: zoom by finger distance around the midpoint.
           const d = Math.hypot(a[0] - b[0], a[1] - b[1]), d0 = Math.hypot(a0[0] - b0[0], a0[1] - b0[1]) || 1;
+          this.stopAuto();
           this.cam = Object.assign({}, start.cam);
           this.applyCamera();
           this.zoomAt((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, start.cam.z * (d / d0));
@@ -244,6 +300,7 @@
         } else if (pts.size === 1 && a0) {
           const dx = a[0] - a0[0], dy = a[1] - a0[1];
           if (this.dragged || Math.hypot(dx, dy) > 8) {
+            if (!this.dragged) this.stopAuto();
             this.dragged = true;
             this.cam.x = start.cam.x + dx;
             this.cam.y = start.cam.y + dy;
@@ -335,6 +392,8 @@
 
     // ---------- scene ----------
     draw(now) {
+      this.updateCamera(now - (this.lastFrame || now));
+      this.lastFrame = now;
       const c = this.ctx;
       c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       c.clearRect(0, 0, this.W, this.H);

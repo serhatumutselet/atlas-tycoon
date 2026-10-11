@@ -131,6 +131,8 @@
     lastCash = view.players.map((p) => p.cash);
     chipDeltas = [];
     board.setGame(view);
+    board.cam = { z: 1, x: 0, y: 0 };
+    board.overview();
     board.active = view.turn;
     logEntries = [];
     renderLog();
@@ -325,6 +327,7 @@
       case 'turn': {
         const p = evt.player;
         board.active = p.id;
+        if (board.autoCam) board.overview();
         renderHud();
         if (!promptState) setStatus(`<p class="wait"><span class="pawn-dot" style="--pc:${p.color}"></span><span>${t('turnOf', { p: `<b>${esc(p.name)}</b>` })}</span></p>`);
         const banner = turnBanner(p);
@@ -332,8 +335,8 @@
         await banner;
         break;
       }
-      case 'dice': await rollDice(evt.dice); break;
-      case 'move': await board.animateMove(evt.player.id, evt.path, evt.jump); renderHud(); break;
+      case 'dice': board.follow(evt.player.id); await rollDice(evt.dice); break;
+      case 'move': board.follow(evt.player.id); await board.animateMove(evt.player.id, evt.path, evt.jump); renderHud(); break;
       case 'money':
         renderHud();
         board.floatText(evt.player.id, (evt.delta > 0 ? '+' : '−') + fmt(Math.abs(evt.delta)), evt.delta > 0 ? '#1f9d55' : '#d93a2b');
@@ -350,7 +353,7 @@
       case 'card': await showCard(evt.card); break;
       case 'bankrupt': board.hideToken(evt.player.id); renderHud(); break;
       case 'round': renderHud(); break;
-      case 'gameOver': renderHud(); setStatus(''); setTimeout(() => view && showOver(evt.player, evt.reason), 700); break;
+      case 'gameOver': board.overview(); renderHud(); setStatus(''); setTimeout(() => view && showOver(evt.player, evt.reason), 700); break;
     }
   }
 
@@ -678,6 +681,7 @@
       if (pick) {
         promptState.pick = pick;
         board.setPickable(pick);
+        if (board.autoCam) board.overview();
         pinnedInfo = -1;
         $('#info').hidden = true;
         setStatus(`<p class="pick-text">${pickText}</p><div class="btns"></div>${timerBar(deadline)}`);
@@ -708,6 +712,13 @@
     panel.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
   }
+  function setCam(on) {
+    board.setAutoCam(on);
+    store.set('atlas.cam', on ? '1' : '0');
+    $('#camBtn').setAttribute('aria-pressed', String(on));
+  }
+  setCam(store.get('atlas.cam') !== '0');
+  $('#camBtn').addEventListener('click', () => setCam(!board.autoCam));
   $('#journalBtn').addEventListener('click', () => togglePanel($('#journalBtn'), $('#journal')));
   $('#menuBtn').addEventListener('click', () => togglePanel($('#menuBtn'), $('#menu')));
   $('#quitBtn').addEventListener('click', () => {

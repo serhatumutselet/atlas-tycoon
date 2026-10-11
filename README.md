@@ -6,7 +6,7 @@ A board game about buying cities, raising landmarks and chasing a monopoly on a 
 
 ## Features
 
-- Isometric board drawn on a canvas, with buildings that rise as you upgrade (villa, tower, hotel, landmark), hopping pawns, 3D dice, and zoom and pan.
+- Isometric board drawn on a canvas, with buildings that rise as you upgrade (villa, tower, hotel, landmark), hopping pawns, 3D dice, zoom and pan, and a camera that follows the pawn after each roll.
 - Online rooms with 5-letter codes and invite links. The server runs the game, so clients can't cheat, and a bot fills in for anyone who disconnects.
 - Hot-seat play on one device, with any mix of humans and bots.
 - English and Turkish, switchable from the home screen or the in-game menu.

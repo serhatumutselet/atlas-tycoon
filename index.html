@@ -82,11 +82,14 @@
 
   <!-- Game -->
   <section id="game" class="game" hidden>
-    <canvas id="board" data-pad-top="64" data-pad-bottom="96" aria-label="Game board"></canvas>
+    <canvas id="board" data-pad-top="64" data-pad-bottom="56" aria-label="Game board"></canvas>
     <header class="hud-top">
       <div id="chips" class="chips"></div>
       <div class="hud-tools">
         <span id="round" class="round"></span>
+        <button id="camBtn" class="icon-btn" type="button" data-i18n-label="camFollow" aria-pressed="true">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
         <button id="journalBtn" class="icon-btn" type="button" data-i18n-label="journal" aria-expanded="false">
           <svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM8 9h8M8 13h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
