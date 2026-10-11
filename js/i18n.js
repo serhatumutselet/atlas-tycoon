@@ -47,7 +47,10 @@
     w_roll: '{p} is rolling…', w_buy: '{p} is deciding whether to buy…', w_build: '{p} is deciding what to build…',
     w_buyout: '{p} is weighing a buyout…', w_resort: '{p} is eyeing a resort…', w_island: '{p} is stranded on the island…',
     w_worldTour: '{p} is picking a destination…', w_festival: '{p} is picking a Gala city…', w_startUpgrade: '{p} is picking a free upgrade…',
-    w_earthquake: '{p} is picking an earthquake target…',
+    w_earthquake: '{p} is picking an earthquake target…', w_sell: '{p} is selling property to pay…',
+    sellTitle: 'Not enough cash', sellQ: 'You owe {m} but have {m2}. Sell properties worth at least {m3}.',
+    sellPicked: 'Selected {m} of {m2} needed', sellSelected: 'Sell selected', sellAuto: 'Sell automatically', sellAutoSub: 'closest to {m}',
+    sellFor: 'sells for {m}',
     // prompts
     rollTitle: 'Your roll', rollSub: '{p}, shake those dice!', rollDice: 'Roll dice', spaceHint: 'or press Space',
     buyTitle: 'For sale', buyQ: 'Nobody owns this yet. Buy it?', plotOnly: 'Plot only', withLevel: 'With {lv}', pass: 'Pass',
@@ -119,7 +122,10 @@
     w_roll: '{p} zar atıyor…', w_buy: '{p} satın almayı düşünüyor…', w_build: '{p} ne inşa edeceğine karar veriyor…',
     w_buyout: '{p} satın alıp almamayı tartıyor…', w_resort: '{p} tatil yerine göz dikti…', w_island: '{p} adada mahsur…',
     w_worldTour: '{p} gideceği yeri seçiyor…', w_festival: '{p} Gala şehrini seçiyor…', w_startUpgrade: '{p} bedava yükseltmesini seçiyor…',
-    w_earthquake: '{p} deprem hedefini seçiyor…',
+    w_earthquake: '{p} deprem hedefini seçiyor…', w_sell: '{p} borcunu ödemek için mülk satıyor…',
+    sellTitle: 'Para yetmiyor', sellQ: '{m} ödemen gerekiyor ama nakdin {m2}. En az {m3} değerinde mülk sat.',
+    sellPicked: 'Seçilen {m} / gereken {m2}', sellSelected: 'Seçilenleri sat', sellAuto: 'Otomatik sat', sellAutoSub: '{m} değerine en yakın',
+    sellFor: 'satış {m}',
     rollTitle: 'Zar sırası', rollSub: '{p}, zarları salla!', rollDice: 'Zar at', spaceHint: 'ya da Boşluk tuşuna bas',
     buyTitle: 'Satılık', buyQ: 'Henüz kimsenin değil. Satın alıyor musun?', plotOnly: 'Sadece arsa', withLevel: '{lv} ile', pass: 'Geç',
     buildTitle: 'İnşaat', buildQ: 'Buradaki {lv} büyüyebilir.', notNow: 'Şimdi değil', rentAfter: 'kira {m}',
@@ -189,7 +195,7 @@
     return s.replace(/\{(\w+)\}/g, (_, k) => {
       const v = params[k];
       if (v == null) return '';
-      if (k === 'm' || k === 'cost') return fmt(v);
+      if (/^m\d?$/.test(k) || k === 'cost') return fmt(v);
       if (k === 'lv') return dict.levels[v];
       if (k === 'tile') return tileName(l, v);
       if (k === 'card') return (CARDS[l] || CARDS.en)[v][0];

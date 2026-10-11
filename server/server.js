@@ -137,7 +137,9 @@ function decide(room, p, req) {
 function sanitizeAnswer(v) {
   if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
   if (typeof v === 'boolean') return v;
-  if (v === 'pay' || v === 'roll') return v;
+  if (v === 'pay' || v === 'roll' || v === 'auto') return v;
+  // A list of tile ids to sell.
+  if (Array.isArray(v) && v.length <= 40 && v.every((x) => Number.isInteger(x))) return v;
   return -1;
 }
 

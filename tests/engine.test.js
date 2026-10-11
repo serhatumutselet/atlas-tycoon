@@ -113,3 +113,26 @@ test('timeout answers roll the dice and pass on everything else', () => {
   assert.strictEqual(Game.timeoutAnswer({ type: 'island' }), 'roll');
   assert.strictEqual(Game.timeoutAnswer({ type: 'worldTour', choices: [1, 2] }), -1);
 });
+
+test('auto-sell picks the smallest total that covers the shortfall', () => {
+  const opts = [{ tileId: 1, value: 300 }, { tileId: 2, value: 120 }, { tileId: 3, value: 90 }, { tileId: 4, value: 45 }];
+  const pick = Game.autoSellPick(opts, 200);
+  const sum = pick.reduce((s, id) => s + opts.find((o) => o.tileId === id).value, 0);
+  assert.strictEqual(sum, 210);
+  assert.strictEqual(new Set(pick).size, pick.length);
+  assert.deepStrictEqual(Game.autoSellPick(opts, 300), [1]);
+  assert.strictEqual(Game.autoSellPick(opts, 9999).length, 4);
+});
+
+test('a short player chooses what to sell; too little is topped up', async () => {
+  let asked = null;
+  const g = makeGame(2, 1, (p, req) => { if (req.type === 'sell') { asked = req; return [3]; } return -1; });
+  const [p, q] = g.players;
+  [1, 3, 5].forEach((id) => (g.tiles[id].owner = p.id));
+  p.cash = 0;
+  const need = 60;
+  assert.strictEqual(await g.charge(p, need, q, 'test'), true);
+  assert.ok(asked && asked.shortfall === need);
+  assert.strictEqual(g.tiles[3].owner, -1, 'chosen tile sold');
+  assert.ok(p.cash >= 0);
+});

@@ -68,6 +68,7 @@
         case 'resort':
         case 'buyout': return false;
         case 'earthquake': return req.choices[0];
+        case 'sell': return 'auto';
         default: return -1;
       }
     }
@@ -182,11 +183,52 @@
       return false;
     }
 
+    sellValue(t) { return Math.round(this.value(t) * this.rules.sellRate); }
+
+    // Picks the properties whose sale covers `shortfall` with the least money left over.
+    // options: [{ tileId, value }]. Returns tile ids; everything if even that is not enough.
+    static autoSellPick(options, shortfall) {
+      const total = options.reduce((s, o) => s + o.value, 0);
+      if (total <= shortfall) return options.map((o) => o.tileId);
+      // Subset-sum over sale values. Bigger properties first, and each reachable sum keeps the
+      // first chain that reached it, so chains use fewer properties and never reuse one.
+      const items = options.slice().sort((a, b) => b.value - a.value);
+      const from = new Array(total + 1).fill(null);
+      from[0] = { prev: -1, item: -1 };
+      items.forEach((o, i) => {
+        for (let s = total - o.value; s >= 0; s--) {
+          if (from[s] && !from[s + o.value] && (from[s].item < i)) from[s + o.value] = { prev: s, item: i };
+        }
+      });
+      let best = shortfall;
+      while (best <= total && !from[best]) best++;
+      const pick = [];
+      for (let s = best; s > 0; s = from[s].prev) pick.push(items[from[s].item].tileId);
+      return pick;
+    }
+
     async liquidate(p, need) {
-      const props = this.owned(p).sort((a, b) => this.value(a) - this.value(b));
-      for (const t of props) {
-        if (p.cash >= need) break;
-        const got = Math.round(this.value(t) * this.rules.sellRate);
+      const shortfall = need - p.cash;
+      const options = this.owned(p).map((t) => ({ tileId: t.id, value: this.sellValue(t) }));
+      const total = options.reduce((s, o) => s + o.value, 0);
+      let pick;
+      if (total >= shortfall && options.length > 1) {
+        // Let the player choose what to sell, or have it picked automatically.
+        const answer = await this.ask(p, { type: 'sell', need, shortfall, options });
+        if (Array.isArray(answer)) {
+          pick = [...new Set(answer)].filter((id) => options.some((o) => o.tileId === id));
+          const got = pick.reduce((s, id) => s + options.find((o) => o.tileId === id).value, 0);
+          // Not enough selected: top up automatically from the rest.
+          if (got < shortfall) pick = pick.concat(Game.autoSellPick(options.filter((o) => !pick.includes(o.tileId)), shortfall - got));
+        } else {
+          pick = Game.autoSellPick(options, shortfall);
+        }
+      } else {
+        pick = Game.autoSellPick(options, shortfall);
+      }
+      for (const id of pick) {
+        const t = this.tiles[id];
+        const got = this.sellValue(t);
         this.release(t);
         p.cash += got;
         await this.say('l_sell', { p: p.name, tile: t.id, m: got });

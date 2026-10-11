@@ -34,6 +34,7 @@ Pinch or scroll to zoom the board, drag to move it, and double-click to reset. T
 - When you land on a rival's city, pay the rent, then you may **buy it out** for twice its value.
 - Owning a whole region doubles rent there. The **Grand Gala** doubles one property's rent again.
 - **Airship Dock**: pay $50 to fly anywhere. Landing exactly on **Departure** gives you a free upgrade.
+- Short on cash? Pick which properties to sell (each sells for half its value), or sell automatically: the smallest set that covers the debt. If even everything isn't enough, you're bankrupt.
 - Every decision has a 10-second clock, shown on the player's card. When time runs out the dice roll by themselves and any other choice is skipped.
 - You win with a Triple Monopoly (three full regions), a Line Monopoly (every property on one side), a Resort Monopoly (all four resorts), by being the last player standing, or by being the richest when the round limit runs out.
 

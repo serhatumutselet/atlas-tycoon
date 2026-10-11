@@ -92,6 +92,7 @@
           return t.type === 'city' ? t.price * D.RENT_MULT[Math.min(4, t.level + 1)] : D.RESORT_RENT[0];
         });
       case 'earthquake': return bestBy(req.choices, (id) => game.rent(game.tiles[id]));
+      case 'sell': return 'auto';
     }
     return -1;
   }

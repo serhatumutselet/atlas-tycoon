@@ -670,6 +670,59 @@
     return Math.round(x.price * D.RENT_MULT[level]) * (full ? 2 : 1) * (view.festival === x.id ? 2 : 1);
   }
 
+  // Pick properties to sell when a payment is short, or let the closest-amount pick do it.
+  function renderSell(p, req) {
+    const valueOf = (id) => req.options.find((o) => o.tileId === id).value;
+    const auto = Game.autoSellPick(req.options, req.shortfall);
+    const autoSum = auto.reduce((s, id) => s + valueOf(id), 0);
+    const chosen = new Set();
+    setStatus('');
+    $('#decide').style.setProperty('--pc', p.color);
+    $('#decide').classList.add('wide');
+    setDecide(`<header class="deed danger"><small>${nameTag(p)}</small><h2>${t('sellTitle')}</h2>
+        <span>${t('sellQ', { m: req.need, m2: p.cash, m3: req.shortfall })}</span></header>
+      <div class="opts sell-grid"></div>
+      <div class="sell-meter"><i></i><span></span></div>
+      <div class="btns"></div>`);
+    const grid = $('#decide .sell-grid');
+    const meter = $('#decide .sell-meter');
+    const row = $('#decide .btns');
+    const sellBtn = el('button', 'btn', '');
+    sellBtn.type = 'button';
+    const autoBtn = el('button', 'btn primary', `${t('sellAuto')}<small>${t('sellAutoSub', { m: req.shortfall })} · ${fmt(autoSum)}</small>`);
+    autoBtn.type = 'button';
+    const update = () => {
+      const sum = [...chosen].reduce((s, id) => s + valueOf(id), 0);
+      const k = Math.min(1, sum / req.shortfall);
+      meter.querySelector('i').style.width = `${k * 100}%`;
+      meter.classList.toggle('done', sum >= req.shortfall);
+      meter.querySelector('span').textContent = t('sellPicked', { m: sum, m2: req.shortfall });
+      sellBtn.innerHTML = `${t('sellSelected')}<small>${fmt(sum)}</small>`;
+      sellBtn.disabled = sum < req.shortfall;
+      grid.querySelectorAll('.opt-card').forEach((c) => c.classList.toggle('picked', chosen.has(Number(c.dataset.id))));
+    };
+    req.options.slice().sort((a, b) => b.value - a.value).forEach((o) => {
+      const x = view.tiles[o.tileId];
+      const card = el('button', 'opt-card sell', `<img src="${board.buildingImage(x.type === 'city' ? x.level : 0, p.color, 110)}" alt="">
+        <span class="opt-name">${esc(I.tileName(x.id))}</span><span class="opt-cost">${fmt(o.value)}</span>
+        <span class="opt-rent">${x.type === 'city' ? I.levelName(x.level) : t('resortTitle')}</span>`);
+      card.type = 'button';
+      card.dataset.id = o.tileId;
+      card.setAttribute('aria-pressed', 'false');
+      card.addEventListener('click', () => {
+        if (chosen.has(o.tileId)) chosen.delete(o.tileId); else chosen.add(o.tileId);
+        card.setAttribute('aria-pressed', String(chosen.has(o.tileId)));
+        update();
+      });
+      grid.appendChild(card);
+    });
+    sellBtn.addEventListener('click', () => finishPrompt([...chosen]));
+    autoBtn.addEventListener('click', () => finishPrompt('auto'));
+    row.append(sellBtn, autoBtn);
+    update();
+    autoBtn.focus({ preventScroll: true });
+  }
+
   function prompt(p, req, reqId, deadline) {
     return new Promise((resolve) => {
       if (promptState) closePrompt();
@@ -735,6 +788,7 @@
         case 'festival': pick = req.choices; cancel = t('skip'); pickText = t('festivalQ', { p: nameTag(p) }); break;
         case 'startUpgrade': pick = req.choices; cancel = t('skip'); pickText = t('startUpgradeQ', { p: nameTag(p) }); break;
         case 'earthquake': pick = req.choices; pickText = t('earthquakeQ', { p: nameTag(p) }); break;
+        case 'sell': return renderSell(p, req);
       }
 
       const makeButtons = (row, list) => list.forEach((b) => {
