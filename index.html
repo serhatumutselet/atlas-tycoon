@@ -33,6 +33,7 @@
         </form>
         <button id="goLocal" class="btn ghost" type="button" data-i18n="playLocal"></button>
       </div>
+      <p id="onlineOff" class="note" data-i18n="onlineOff" hidden></p>
       <p id="homeError" class="error" role="alert"></p>
       <details class="rules">
         <summary data-i18n="howToPlay"></summary>
@@ -88,6 +89,9 @@
     <header class="hud-top">
       <div class="hud-tools">
         <span id="round" class="round"></span>
+        <button id="soundBtn" class="icon-btn" type="button" data-i18n-label="sound" aria-pressed="true">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
         <button id="camBtn" class="icon-btn" type="button" data-i18n-label="camFollow" aria-pressed="true">
           <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
         </button>
@@ -127,6 +131,8 @@
     </div>
     <div id="turnBanner" class="turn-banner" hidden></div>
     <div id="cardShow" class="card-show" hidden></div>
+    <div id="payShow" class="pay-show" hidden></div>
+    <div id="bankShow" class="bank-show" hidden></div>
   </section>
 
   <div id="over" class="overlay" hidden>
@@ -140,6 +146,7 @@
     </div>
   </div>
 
+  <script src="js/sfx.js"></script>
   <script src="js/data.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/engine.js"></script>

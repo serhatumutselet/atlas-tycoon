@@ -106,6 +106,7 @@
       for (const pos of path) {
         const [x, y] = this.slotPos(pos, pid);
         const sx = tk.x, sy = tk.y;
+        if (this.onHop) this.onHop();
         await this.tween(230, (k) => {
           tk.x = sx + (x - sx) * k;
           tk.y = sy + (y - sy) * k;
@@ -115,7 +116,19 @@
       }
     }
 
-    hideToken(pid) { if (this.tokens[pid]) this.tokens[pid].alpha = 0; }
+    // A bankrupt pawn tips off the board and fades away.
+    hideToken(pid) {
+      const tk = this.tokens[pid];
+      if (!tk) return Promise.resolve();
+      if (this.skipping) { tk.alpha = 0; return Promise.resolve(); }
+      return this.tween(1300, (k) => { tk.z = -2.6 * k * k; tk.alpha = 1 - k; });
+    }
+
+    // A dust cloud where a building was lost (sold, bankrupt, earthquake).
+    puff(tileId) {
+      const c = CELLS[tileId];
+      this.puffs = (this.puffs || []).concat([{ x: c.x + 0.4, y: c.y + 0.4, t0: performance.now() }]);
+    }
 
     // Renders one building (or a bare plot) on a tile, in this board's own style, as an image URL.
     buildingImage(level, color, px) {
@@ -1266,7 +1279,22 @@
       }
     }
 
+    drawPuffs(now) {
+      const c = this.ctx;
+      this.puffs = (this.puffs || []).filter((p) => now - p.t0 < 1100);
+      for (const p of this.puffs) {
+        const k = (now - p.t0) / 1100;
+        for (let i = 0; i < 9; i++) {
+          const a = i * 0.7 + p.x;
+          const [sx, sy] = this.P(p.x + Math.cos(a) * k * 0.45, p.y + Math.sin(a) * k * 0.45, TILE_Z + 0.15 + k * 0.5 + (i % 3) * 0.1);
+          c.fillStyle = `rgba(170,160,150,${0.6 * (1 - k)})`;
+          c.beginPath(); c.arc(sx, sy, this.TW * (0.06 + k * 0.1), 0, Math.PI * 2); c.fill();
+        }
+      }
+    }
+
     drawFloats(now) {
+      this.drawPuffs(now);
       const c = this.ctx;
       this.floats = this.floats.filter((f) => now - f.t0 < 2000);
       for (const f of this.floats) {

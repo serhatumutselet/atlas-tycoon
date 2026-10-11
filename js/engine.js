@@ -78,7 +78,7 @@
       const out = {};
       for (const k in obj) {
         const v = obj[k];
-        if (k === 'player' || k === 'owner') out[k + 'Id'] = v.id;
+        if (k === 'player' || k === 'owner' || k === 'to') out[k + 'Id'] = v.id;
         else if (k === 'tile') out.tileId = v.id;
         else out[k] = v;
       }
@@ -89,6 +89,7 @@
       const out = Object.assign({}, obj);
       if ('playerId' in obj) out.player = this.players[obj.playerId];
       if ('ownerId' in obj) out.owner = this.players[obj.ownerId];
+      if ('toId' in obj) out.to = this.players[obj.toId];
       if ('tileId' in obj) out.tile = this.tiles[obj.tileId];
       return out;
     }
@@ -171,12 +172,14 @@
       if (amount <= 0) return true;
       if (p.cash < amount) await this.liquidate(p, amount);
       if (p.cash >= amount) {
+        if (to) await this.emit({ type: 'pay', player: p, to, amount, why });
         p.cash -= amount;
         await this.emit({ type: 'money', player: p, delta: -amount, why });
         if (to) await this.gain(to, amount, why);
         return true;
       }
       const paid = p.cash;
+      if (to && paid > 0) await this.emit({ type: 'pay', player: p, to, amount: paid, why });
       p.cash = 0;
       if (to && paid > 0) await this.gain(to, paid, why);
       await this.goBankrupt(p, to);
@@ -534,8 +537,9 @@
       case 'card': return 2600;
       case 'turn': return 1000;
       case 'tile': return 500;
-      case 'bankrupt': return 1200;
-      case 'money': return 120;
+      case 'bankrupt': return 3000;
+      case 'pay': return 1300;
+      case 'money': return 150;
       default: return 0;
     }
   }

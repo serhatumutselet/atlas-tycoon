@@ -1,0 +1,5 @@
+server/
+tests/
+docs/
+.github/
+node_modules/

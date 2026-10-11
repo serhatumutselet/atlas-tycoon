@@ -4,6 +4,14 @@
   const { Game, fmt } = window.ATEngine;
   const AI = window.ATAI;
   const I = window.ATI18N;
+  // The same sound fired several times at once (e.g. many tiles freed by a bankruptcy) plays once.
+  const lastSfx = {};
+  const sfx = (name) => {
+    const now = performance.now();
+    if (now - (lastSfx[name] || 0) < 180) return;
+    lastSfx[name] = now;
+    window.ATSfx.play(name);
+  };
   const t = I.t;
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
@@ -26,11 +34,13 @@
 
   const board = new window.ATRender.IsoBoard($('#board'), { onHover, onClick: onTileClick });
   board.nameOf = (id) => I.tileName(id);
+  board.onHop = () => sfx('hop');
   let view = null; // Game whose state the HUD and board show
   let session = null; // { kind: 'local' | 'online', ... }
   let levels = [];
   let logEntries = [];
   let lastCash = [];
+  let owners = [];
   let chipDeltas = [];
   let promptState = null; // { resolve, reqId, pick }
   let turnClock = null; // { pid, deadline, total } shown as a bar on that player's card
@@ -67,6 +77,19 @@
     I.setLang(l);
     store.set('atlas.lang', I.lang);
     applyLang();
+  document.addEventListener('click', (e) => { if (e.target.closest('.btn, .opt-card, .icon-btn, .lang button')) sfx('click'); });
+  const soundBtn = $('#soundBtn');
+  const syncSound = () => soundBtn.setAttribute('aria-pressed', String(!window.ATSfx.muted));
+  soundBtn.addEventListener('click', () => { window.ATSfx.setMuted(!window.ATSfx.muted); syncSound(); });
+  syncSound();
+
+  // Static hosting (e.g. Vercel) has no game server: switch online play off and say why.
+  fetch('/api/health').then((r) => r.ok).catch(() => false).then((ok) => {
+    if (ok) return;
+    $('#goOnline').disabled = true;
+    $$('#joinForm input, #joinForm button').forEach((e) => (e.disabled = true));
+    $('#onlineOff').hidden = false;
+  });
   }
   $$('[data-lang]').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
   I.setLang(store.get('atlas.lang') || ((navigator.language || '').toLowerCase().startsWith('tr') ? 'tr' : 'en'));
@@ -133,6 +156,7 @@
     view = v;
     turnClock = null;
     levels = view.tiles.map((x) => x.level);
+    owners = view.tiles.map((x) => x.owner);
     lastCash = view.players.map((p) => p.cash);
     chipDeltas = [];
     board.setGame(view);
@@ -322,7 +346,7 @@
     board.setGame(null);
     closePrompt();
     history.replaceState(null, '', location.pathname);
-    ['#over', '#info', '#diceShow', '#turnBanner', '#cardShow'].forEach((s) => ($(s).hidden = true));
+    ['#over', '#info', '#diceShow', '#turnBanner', '#cardShow', '#payShow', '#bankShow'].forEach((s) => ($(s).hidden = true));
     show('home');
   }
 
@@ -338,6 +362,7 @@
         if (board.autoCam) board.overview();
         renderHud();
         if (!promptState) setStatus(`<p class="wait"><span class="pawn-dot" style="--pc:${p.color}"></span><span>${t('turnOf', { p: `<b>${esc(p.name)}</b>` })}</span></p>`);
+        sfx(isMine(p) ? 'myTurn' : 'turn');
         const banner = turnBanner(p);
         if (local) await wait(p.isBot ? 700 : 900);
         await banner;
@@ -367,22 +392,30 @@
         break;
       }
       case 'money':
+        if (evt.delta > 0) sfx(evt.why === 'salary' || evt.why === 'card' ? 'gain' : 'coin');
+        else if (!['rent', 'buyout'].includes(evt.why)) sfx(evt.why === 'purchase' || evt.why === 'build' ? 'coin' : 'lose');
         renderHud();
         board.floatText(evt.player.id, (evt.delta > 0 ? '+' : '−') + fmt(Math.abs(evt.delta)), evt.delta > 0 ? '#1f9d55' : '#d93a2b');
         break;
       case 'tile': {
         const x = evt.tile;
-        if (x.owner >= 0 && x.level > levels[x.id]) board.markGrow(x.id);
+        const was = owners[x.id], wasLevel = levels[x.id];
+        if (x.owner >= 0 && x.level > wasLevel) board.markGrow(x.id);
+        if (x.owner >= 0 && was !== x.owner) sfx('buy');
+        else if (x.owner >= 0 && x.level > wasLevel) sfx('build');
+        if ((was >= 0 && x.owner < 0) || x.level < wasLevel) { board.puff(x.id); sfx('sell'); }
         levels[x.id] = x.level;
+        owners[x.id] = x.owner;
         renderHud();
         if (pinnedInfo === x.id) showInfo(x.id, true);
         if (local) await wait(350);
         break;
       }
-      case 'card': await showCard(evt.card); break;
-      case 'bankrupt': board.hideToken(evt.player.id); renderHud(); break;
+      case 'pay': await showPayment(evt); break;
+      case 'card': sfx('card'); await showCard(evt.card); break;
+      case 'bankrupt': await showBankrupt(evt.player); break;
       case 'round': renderHud(); break;
-      case 'gameOver': board.overview(true); renderHud(); setStatus(''); setTimeout(() => view && showOver(evt.player, evt.reason), 700); break;
+      case 'gameOver': sfx('win'); board.overview(true); renderHud(); setStatus(''); setTimeout(() => view && showOver(evt.player, evt.reason), 700); break;
     }
   }
 
@@ -443,6 +476,7 @@
     box.classList.remove('throw');
     void box.offsetWidth;
     box.classList.add('throw');
+    sfx('dice');
     cubes.forEach((c, i) => {
       const [fx, fy] = FACE_ROT[dice[i]];
       const st = cubeState[i];
@@ -453,6 +487,7 @@
     });
     await new Promise((r) => setTimeout(r, 1300));
     const doubles = dice[0] === dice[1];
+    sfx('diceLand');
     total.innerHTML = `<b>${dice[0] + dice[1]}</b>${doubles ? `<span>${t('doubles')}</span>` : ''}`;
     total.classList.add('show');
     await new Promise((r) => setTimeout(r, 650));
@@ -475,6 +510,61 @@
     repairs: '<path d="M14.5 3.5a5 5 0 0 0-5.6 6.6L3.5 15.5l5 5 5.4-5.4a5 5 0 0 0 6.6-5.6l-3 3-3.4-1-1-3.4z" fill="currentColor"/>',
     taxi: '<path d="M20 12H7M12 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
   };
+
+  // Player-to-player payment: a banner in the middle and coins flying between the two cards.
+  async function showPayment(evt) {
+    const from = evt.player, to = evt.to;
+    sfx('pay');
+    if (board.skipping) return;
+    const label = { rent: t('payRent'), buyout: t('payBuyout') }[evt.why] || t('payCard');
+    const box = $('#payShow');
+    box.innerHTML = `<div class="pay-card"><span class="eyebrow">${label}</span>
+      <div class="pay-row">${avatar(from)}<span class="pay-arrow">→</span>${avatar(to)}</div>
+      <div class="pay-names"><b style="color:${from.color}">${esc(from.name)}</b><b style="color:${to.color}">${esc(to.name)}</b></div>
+      <div class="pay-amount">−${fmt(evt.amount)}</div></div>`;
+    box.hidden = false;
+    flyCoins(from.id, to.id);
+    await (session.kind === 'local' ? wait(1200) : new Promise((r) => setTimeout(r, 1250)));
+    box.hidden = true;
+  }
+
+  function flyCoins(fromId, toId) {
+    const a = $(`#chips .c${fromId} .avatar`), b = $(`#chips .c${toId} .avatar`);
+    if (!a || !b || !a.animate) return;
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    for (let i = 0; i < 9; i++) {
+      const coin = el('span', 'fly-coin');
+      document.body.appendChild(coin);
+      const dx = rb.left - ra.left, dy = rb.top - ra.top;
+      const lift = -80 - Math.random() * 80;
+      coin.style.left = ra.left + ra.width / 2 + 'px';
+      coin.style.top = ra.top + ra.height / 2 + 'px';
+      coin.animate([
+        { transform: 'translate(-50%,-50%) scale(0.4)', opacity: 0 },
+        { transform: `translate(calc(-50% + ${dx * 0.5}px), calc(-50% + ${dy * 0.5 + lift}px)) scale(1.1)`, opacity: 1, offset: 0.5 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.7)`, opacity: 0.9 },
+      ], { duration: 900, delay: i * 70, easing: 'cubic-bezier(.3,.6,.4,1)', fill: 'backwards' }).onfinish = () => coin.remove();
+    }
+  }
+
+  // Bankruptcy: screen shake, a stamp in the middle, and the pawn falls off the board.
+  async function showBankrupt(p) {
+    sfx('bankrupt');
+    renderHud();
+    if (board.skipping) { board.hideToken(p.id); return; }
+    const box = $('#bankShow');
+    box.innerHTML = `<div class="bank-card">${avatar(p)}<div class="bank-stamp">${t('bankruptTitle')}</div>
+      <p>${t('bankruptSub', { p: `<b style="color:${p.color}">${esc(p.name)}</b>` })}</p></div>`;
+    box.hidden = false;
+    const game = $('#game');
+    game.classList.remove('quake');
+    void game.offsetWidth;
+    game.classList.add('quake');
+    await board.hideToken(p.id);
+    await (session.kind === 'local' ? wait(1300) : new Promise((r) => setTimeout(r, 1500)));
+    box.hidden = true;
+    game.classList.remove('quake');
+  }
 
   async function showCard(card) {
     if (board.skipping) return;
@@ -521,7 +611,9 @@
     const current = view.players[view.turn];
     view.players.forEach((p, i) => {
       const me = session && session.kind === 'online' && p.id === session.seat;
-      const chip = el('div', `chip c${i}${p === current && !view.winner ? ' active' : ''}${p.bankrupt ? ' out' : ''}`);
+      const low = !p.bankrupt && p.cash < 200;
+      const chip = el('div', `chip c${i}${p === current && !view.winner && !p.bankrupt ? ' active' : ''}${p.bankrupt ? ' out' : ''}${low ? ' low' : ''}`);
+      chip.dataset.stamp = t('bankrupt');
       chip.style.setProperty('--pc', p.color);
       const badges = [p.islandTurns ? t('badgeIsle') : '', p.shield ? t('badgeShield') : '', p.coupon ? t('badgeCoupon') : ''].filter(Boolean);
       const props = view.owned(p).length;
@@ -530,7 +622,7 @@
         <span class="chip-cash">${p.bankrupt ? t('bankrupt') : fmt(p.cash)}</span>
         <span class="chip-meta">${t('props', { n: props })} · ${t('lap', { n: p.laps + 1 })}</span>
         ${badges.length ? `<span class="badges">${badges.map((b) => `<span class="badge">${b}</span>`).join('')}</span>` : ''}</span>
-        ${p === current && !view.winner ? `<span class="turn-tag">${t('turnTag')}</span>` : ''}
+        ${p === current && !view.winner && !p.bankrupt ? `<span class="turn-tag">${t('turnTag')}</span>` : ''}
         ${turnClock && turnClock.pid === p.id ? clockBar() : ''}`;
       chip.title = t('worth', { m: view.netWorth(p) });
       const delta = p.cash - (lastCash[i] != null ? lastCash[i] : p.cash);
@@ -544,6 +636,7 @@
         d.style.animationDelay = `-${Math.round(age)}ms`;
         chip.appendChild(d);
         chip.classList.add(cd.v > 0 ? 'gain' : 'loss');
+        chip.style.animationDelay = `-${Math.round(age)}ms`;
       }
       box.appendChild(chip);
     });
@@ -558,10 +651,21 @@
 
   function startClock(pid, deadline) {
     turnClock = { pid, deadline, total: DECISION_MS };
+    clearInterval(startClock.ticker);
+    // Tick for the last three seconds, only on the deciding player's own screen.
+    if (isMine(view.players[pid])) {
+      let last = 99;
+      startClock.ticker = setInterval(() => {
+        const left = Math.ceil((deadline - Date.now()) / 1000);
+        if (left <= 3 && left > 0 && left !== last) sfx('tick');
+        last = left;
+      }, 100);
+    }
     renderHud();
   }
 
   function stopClock() {
+    clearInterval(startClock.ticker);
     if (!turnClock) return;
     turnClock = null;
     renderHud();
