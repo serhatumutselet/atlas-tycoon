@@ -540,3 +540,86 @@ input, select {
   100% { transform: scaleX(0); background: #e5321f; }
 }
 .chip:has(.chip-timer) { padding-bottom: 16px; }
+
+/* ==========================================================================
+   Larger, more legible popups and HUD text
+   ========================================================================== */
+body { font-size: 16px; }
+.btn { font-size: 17px; padding: 12px 18px; border-radius: 16px; }
+.btn small { font-size: 14px; }
+.decide { width: min(500px, 100%); padding: 24px; gap: 16px; }
+.deed { margin: -24px -24px 0; padding: 20px 24px 18px; }
+.deed small { font-size: 13px; }
+.deed h2 { font-size: 46px; }
+.deed span { font-size: 16px; }
+.decide .ask p { font-size: 20px; line-height: 1.35; }
+.decide .small { font-size: 16px; }
+.decide .hint { font-size: 15px; }
+.decide .cash-left { font-size: 17px; }
+.decide .btns .btn { font-size: 19px; padding: 14px 18px; }
+.decide .btns .btn.big { font-size: 28px; padding: 18px; }
+.opt { padding: 14px 18px; border-radius: 18px; grid-template-columns: 40px 1fr auto; column-gap: 14px; }
+.lvl-icon { width: 36px; height: 36px; }
+.opt-name { font-size: 19px; }
+.opt-rent { font-size: 15px; }
+.opt-cost { font-size: 30px; }
+.roll-card small { font-size: 13px; }
+.roll-card h2 { font-size: 36px; }
+.roll-card .avatar { width: 76px; height: 76px; border-radius: 24px; }
+.roll-card .avatar svg { width: 44px; height: 44px; }
+.roll-card .mini-dice span { width: 54px; height: 54px; }
+
+.fortune { width: min(400px, 86%); padding: 32px 26px 30px; gap: 8px; }
+.fortune .eyebrow { font-size: 13px; }
+.card-icon { width: 92px; height: 92px; border-radius: 28px; }
+.card-icon svg { width: 54px; height: 54px; }
+.fortune h3 { font-size: 40px; }
+.fortune p { font-size: 20px; line-height: 1.35; }
+
+.action { padding: 13px 26px; max-width: min(560px, calc(100% - 520px)); }
+.action .wait, .pick-text { font-size: 19px; }
+.action .wait .pawn-dot { width: 18px; height: 18px; }
+.ticker { font-size: 16px; padding: 8px 18px; }
+.turn-banner { font-size: 40px; }
+
+.chip { width: 250px; }
+.chip-name { font-size: 16px; }
+.chip-cash { font-size: 28px; }
+.chip-meta { font-size: 13px; }
+.badge { font-size: 12px; padding: 2px 7px; }
+.turn-tag { font-size: 14px; }
+
+.info { width: 300px; font-size: 15px; }
+.deed.mini h3 { font-size: 26px; }
+.info table { font-size: 14px; }
+.info th { font-size: 13px; }
+
+.over-panel h2 { font-size: 52px; }
+.standings li { font-size: 18px; padding: 12px 14px; }
+.journal ol { font-size: 15px; }
+.journal h3 { font-size: 24px; }
+
+@media (max-width: 900px) {
+  .action { max-width: calc(100% - 24px); }
+  .chip { width: 220px; }
+}
+@media (max-width: 640px) {
+  .decide { padding: 18px; }
+  .deed { margin: -18px -18px 0; padding: 16px 18px 14px; }
+  .deed h2 { font-size: 34px; }
+  .decide .ask p { font-size: 18px; }
+  .opt { padding: 12px 14px; }
+  .opt-name { font-size: 17px; }
+  .opt-cost { font-size: 25px; }
+  .decide .btns .btn.big { font-size: 24px; }
+  .roll-card h2 { font-size: 28px; }
+  .fortune h3 { font-size: 30px; }
+  .fortune p { font-size: 17px; }
+  .chip { width: calc(50% - 16px); }
+  .chip-name { font-size: 13px; }
+  .chip-cash { font-size: 20px; }
+  .action .wait, .pick-text { font-size: 16px; }
+  .ticker { font-size: 13px; }
+  .turn-banner { font-size: 28px; }
+  .info { width: 250px; font-size: 14px; }
+}

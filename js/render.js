@@ -1146,7 +1146,7 @@
       const [sx, sy] = this.P(cx + 0.24, cy + 0.24, z);
       const big = this.TW >= 58;
       const name = this.nameOf ? this.nameOf(t.id) : t.name;
-      const fs = Math.max(8, Math.min(14, this.TW * 0.11));
+      const fs = Math.max(9, Math.min(16, this.TW * 0.125));
       const pf = Math.max(11, Math.min(20, this.TW * 0.165));
       if (t.id % 8 === 0) {
         if (big) {
@@ -1162,16 +1162,18 @@
       }
       let value = null;
       // On small boards only rents are shown; prices are one tap away in the tile card.
-      if (t.type === 'city' || t.type === 'resort') value = owner ? g.rent(t) : this.TW >= 42 ? t.price : null;
+      // Only owned properties show a number: the rent a visitor pays. Prices live in the tile card.
+      if ((t.type === 'city' || t.type === 'resort') && owner) value = g.rent(t);
       const pillY = big ? sy + pf * 0.62 : sy;
+      const nameY = value != null ? sy - pf * 0.55 : sy;
       if (big) {
         c.lineWidth = 3;
         c.strokeStyle = 'rgba(255,250,240,0.9)';
         c.font = `600 ${Math.round(fs)}px ${this.fonts.body}`;
         c.textAlign = 'center';
         c.textBaseline = 'middle';
-        c.strokeText(name, sx, sy - pf * 0.55);
-        this.text(name, sx, sy - pf * 0.55, fs, '#232845', this.fonts.body, 600);
+        c.strokeText(name, sx, nameY);
+        this.text(name, sx, nameY, fs, '#232845', this.fonts.body, 600);
       }
       if (value != null) {
         const label = '$' + value.toLocaleString('en-US');
