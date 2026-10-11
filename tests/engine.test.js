@@ -126,13 +126,13 @@ test('auto-sell picks the smallest total that covers the shortfall', () => {
 
 test('a short player chooses what to sell; too little is topped up', async () => {
   let asked = null;
-  const g = makeGame(2, 1, (p, req) => { if (req.type === 'sell') { asked = req; return [3]; } return -1; });
+  const g = makeGame(2, 1, (p, req) => { if (req.type === 'sell') { asked = req; return [4]; } return -1; });
   const [p, q] = g.players;
-  [1, 3, 5].forEach((id) => (g.tiles[id].owner = p.id));
+  [1, 2, 4].forEach((id) => (g.tiles[id].owner = p.id));
   p.cash = 0;
   const need = 60;
   assert.strictEqual(await g.charge(p, need, q, 'test'), true);
   assert.ok(asked && asked.shortfall === need);
-  assert.strictEqual(g.tiles[3].owner, -1, 'chosen tile sold');
+  assert.strictEqual(g.tiles[4].owner, -1, 'chosen tile sold');
   assert.ok(p.cash >= 0);
 });

@@ -35,6 +35,21 @@
   const board = new window.ATRender.IsoBoard($('#board'), { onHover, onClick: onTileClick });
   board.nameOf = (id) => I.tileName(id);
   board.onHop = () => sfx('hop');
+  // Text printed on each tile's card: header (country or tile type), name, and a short note.
+  board.labels = (x) => {
+    const name = I.tileName(x.id);
+    switch (x.type) {
+      case 'city': return { title: I.groupName(x.group), name, note: '' };
+      case 'resort': return { title: t('resort'), name, note: '' };
+      case 'chance': return { title: name, name: t('cardDraw'), note: '' };
+      case 'tax': return { title: name, name: t('taxNote'), note: '' };
+      case 'start': return { title: name, name: t('startNote'), note: '' };
+      case 'island': return { title: name, name: t('islandNote'), note: '' };
+      case 'festival': return { title: name, name: t('galaNote'), note: '' };
+      case 'worldTour': return { title: name, name: t('tourNote'), note: '' };
+    }
+    return { title: '', name, note: '' };
+  };
   let view = null; // Game whose state the HUD and board show
   let session = null; // { kind: 'local' | 'online', ... }
   let levels = [];

@@ -22,21 +22,35 @@
     return '#' + h(0) + h(1) + h(2);
   }
 
-  // Tile index -> grid cell. Departure sits at the front corner of the diamond.
-  function cellOf(i) {
-    if (i <= 8) return [8, 8 - i];
-    if (i <= 16) return [8 - (i - 8), 0];
-    if (i <= 24) return [0, i - 16];
-    return [i - 24, 8];
+  // Board geometry: corners are C x C, side tiles are 1 wide and C deep, so the board is S = 2C + 7
+  // across. Departure sits at the front corner of the diamond.
+  const C = 1.6;
+  const S = 2 * C + 7;
+  const OFF = S / 2 - 4.5; // shift for park decorations that were laid out around 4.5
+  function rectOf(i) {
+    const side = Math.floor(i / 8), k = i % 8;
+    let x0, y0, w, h;
+    if (k === 0) { [x0, y0] = [[S - C, S - C], [0, S - C], [0, 0], [S - C, 0]][side]; w = h = C; }
+    else if (side === 0) { x0 = S - C - k; y0 = S - C; w = 1; h = C; }
+    else if (side === 1) { x0 = 0; y0 = S - C - k; w = C; h = 1; }
+    else if (side === 2) { x0 = C + k - 1; y0 = 0; w = 1; h = C; }
+    else { x0 = S - C; y0 = C + k - 1; w = C; h = 1; }
+    // Side tiles have a depth axis; the half nearer the board's back (smaller coordinate) holds the
+    // building, the half nearer the camera holds the printed card so buildings never cover it.
+    const axis = k === 0 ? null : side % 2 === 0 ? 'y' : 'x';
+    return { x0, y0, x1: x0 + w, y1: y0 + h, cx: x0 + w / 2, cy: y0 + h / 2, axis };
   }
-  // cellOf returns [row, col]; world x = col, y = row.
-  const CELLS = D.TILES.map((t) => { const [r, c] = cellOf(t.id); return { x: c, y: r }; });
-  const CELL_TO_TILE = {};
-  CELLS.forEach((c, i) => (CELL_TO_TILE[c.x + ',' + c.y] = i));
-  // Which edge of each side faces the board centre (for the colour band).
-  const INNER = ['y0', 'x1', 'y1', 'x0'];
-  const SLOTS = [[0.2, 0.22], [-0.05, 0.3], [0.3, -0.04], [0.06, 0.06]];
+  const RECTS = D.TILES.map((t) => rectOf(t.id));
+  const DRAW_ORDER = RECTS.map((r, i) => i).sort((a, b) => (RECTS[a].cx + RECTS[a].cy) - (RECTS[b].cx + RECTS[b].cy));
+  // A point on a tile: `along` the board edge from the centre, `depth` from the tile's back edge.
+  function at(r, along, depth) {
+    if (!r.axis) return [r.cx + along, r.cy + depth];
+    return r.axis === 'y' ? [r.cx + along, r.y0 + depth] : [r.x0 + depth, r.cy + along];
+  }
+  // Pawn slots as [along, depth offset] around the line between building and card.
+  const SLOTS = [[-0.22, -0.2], [0.22, -0.2], [-0.22, -0.04], [0.22, -0.04]];
   const CORNER_TOP = { start: '#ffe39a', island: '#f7dea8', festival: '#ffd0e2', worldTour: '#d4e6ff' };
+  const CARD_COLOR = { resort: '#1fa2b8', chance: '#e0a21b', tax: '#c0392b', start: '#e8553d', island: '#d9962b', festival: '#d65a7a', worldTour: '#3d7fc4' };
 
   // Deterministic jagged rock outline under the island.
   const ROCK = Array.from({ length: 11 }, (_, i) => 0.5 + ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 * 1.1);
@@ -89,9 +103,11 @@
     }
 
     slotPos(tileId, pid) {
-      const c = CELLS[tileId];
+      const r = RECTS[tileId];
       const s = SLOTS[pid % 4];
-      return [c.x + 0.5 + s[0] - 0.12, c.y + 0.5 + s[1] - 0.12];
+      if (!r.axis) return [r.cx + 0.2 + s[0] * 1.5, r.cy + 0.2 + s[1] * 1.5];
+      // Pawns stand on the line between the building and the printed card.
+      return at(r, s[0], C * 0.5 + s[1]);
     }
 
     async animateMove(pid, path, jump) {
@@ -126,8 +142,8 @@
 
     // A dust cloud where a building was lost (sold, bankrupt, earthquake).
     puff(tileId) {
-      const c = CELLS[tileId];
-      this.puffs = (this.puffs || []).concat([{ x: c.x + 0.4, y: c.y + 0.4, t0: performance.now() }]);
+      const [x, y] = this.anchor(tileId);
+      this.puffs = (this.puffs || []).concat([{ x, y, t0: performance.now() }]);
     }
 
     // Renders one building (or a bare plot) on a tile, in this board's own style, as an image URL.
@@ -184,8 +200,8 @@
     }
 
     tileScreenPos(id) {
-      const c = CELLS[id];
-      return this.P(c.x + 0.5, c.y + 0.5, TILE_Z);
+      const r = RECTS[id];
+      return this.P(r.cx, r.cy, TILE_Z);
     }
 
     // Skip animations when nobody can see them (background tab) or when catching up.
@@ -225,10 +241,11 @@
       const avail = this.H - padTop - padBottom;
       // Board extents in tile widths: 9.8 across, about 6.9 tall including sky-high landmarks and rock.
       // Board extents in tile widths: 9.8 across, about 6.9 tall including sky-high landmarks and rock.
-      // The diamond is 9.9 tiles across and 4.95 tile widths tall; leave a little headroom for
+      // The diamond spans S + 0.9 tile widths either side of centre; leave a little headroom for
       // landmarks and let the hanging rock run off the bottom of the screen.
-      const tw = Math.max(20, Math.min((this.W * 0.98) / 9.9, avail / 5.5));
-      const total = 5.5 * tw;
+      const E = S + 0.9; // half the diamond's width in tile widths
+      const tw = Math.max(20, Math.min((this.W * 0.98) / E, avail / (E / 2 + 0.55)));
+      const total = (E / 2 + 0.55) * tw;
       this.base = { tw, ox: this.W / 2, oy: padTop + Math.max(0, (avail - total) / 2) + 0.55 * tw + 0.225 * tw };
       this.applyCamera();
     }
@@ -295,7 +312,7 @@
         // Don't leave empty sky beside the board: pull its corners back to the screen edges.
         const sx = (wx) => cx + (b.ox + wx * b.tw / 2 - cx) * tz + tx;
         const sy = (wy) => cy + (b.oy + wy * b.tw / 4 - cy) * tz + ty;
-        const left = sx(-9.9), right = sx(9.9), top = sy(-0.9), front = sy(18.9);
+        const left = sx(-(S + 0.9)), right = sx(S + 0.9), top = sy(-0.9), front = sy(2 * S + 0.9);
         if (right - left > this.W) {
           if (left > 0) tx -= left;
           else if (right < this.W) tx += this.W - right;
@@ -385,9 +402,8 @@
     pickAt(sx, sy) {
       const u = (sx - this.ox) / (this.TW / 2);
       const v = (sy - this.oy + TILE_Z * this.ZS) / (this.TH / 2);
-      const x = Math.floor((u + v) / 2), y = Math.floor((v - u) / 2);
-      const id = CELL_TO_TILE[x + ',' + y];
-      return id == null ? -1 : id;
+      const x = (u + v) / 2, y = (v - u) / 2;
+      return RECTS.findIndex((r) => x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1);
     }
 
     onPointer(e, click) {
@@ -463,7 +479,8 @@
       this.drawIslets(now);
       const objects = [];
       this.drawIsland(now, objects);
-      for (const t of this.game.tiles) this.drawTile(t, objects);
+      // Back to front, so a tile's side faces never paint over the card on the tile in front of it.
+      for (const id of DRAW_ORDER) this.drawTile(this.game.tiles[id], objects);
       this.game.players.forEach((p, i) => {
         const tk = this.tokens[i];
         if (tk && tk.alpha > 0) objects.push({ d: tk.x + tk.y + 0.05, f: () => this.drawPawn(p, tk, i) });
@@ -570,7 +587,7 @@
     drawIsland(now, objects) {
       const P = this.P.bind(this);
       const c = this.ctx;
-      const a = -0.45, b = 9.45, zt = -0.02, zb = -0.6;
+      const a = -0.45, b = S + 0.45, zt = -0.02, zb = -0.6;
       // Hanging rock under the two visible edges.
       const left = [P(a, b, zb)], right = [P(b, b, zb)];
       ROCK.forEach((d, i) => {
@@ -627,15 +644,16 @@
       c.beginPath(); c.ellipse(mx, my, this.TW * 0.2, this.TW * 0.05, 0, 0, Math.PI * 2); c.fill();
 
       // Centre park: lawn with a hedge border, painted title, pond with a fountain.
-      this.poly([P(1.1, 1.1, 0), P(7.9, 1.1, 0), P(7.9, 7.9, 0), P(1.1, 7.9, 0)], '#86c96d');
-      this.poly([P(1.22, 1.22, 0), P(7.78, 1.22, 0), P(7.78, 7.78, 0), P(1.22, 7.78, 0)], '#a5dc89');
+      const p0 = C + 0.1, p1 = S - C - 0.1, q0 = C + 0.22, q1 = S - C - 0.22;
+      this.poly([P(p0, p0, 0), P(p1, p0, 0), P(p1, p1, 0), P(p0, p1, 0)], '#86c96d');
+      this.poly([P(q0, q0, 0), P(q1, q0, 0), P(q1, q1, 0), P(q0, q1, 0)], '#a5dc89');
       // Mown stripes.
       for (let i = 0; i < 6; i++) {
-        const u = 1.22 + i * 1.1;
-        this.poly([P(u, 1.22, 0), P(u + 0.55, 1.22, 0), P(u + 0.55, 7.78, 0), P(u, 7.78, 0)], 'rgba(255,255,255,0.07)');
+        const u = q0 + i * 1.1;
+        this.poly([P(u, q0, 0), P(u + 0.55, q0, 0), P(u + 0.55, q1, 0), P(u, q1, 0)], 'rgba(255,255,255,0.07)');
       }
       // Sand path from Departure's corner to the pond.
-      this.poly([P(7.78, 7.5, 0), P(7.78, 7.78, 0), P(7.5, 7.78, 0), P(6.9, 7.1, 0), P(7.1, 6.9, 0)], '#f1dfae');
+      this.poly([P(q1, q1 - 0.28, 0), P(q1, q1, 0), P(q1 - 0.28, q1, 0), P(7.5, 7.7, 0), P(7.7, 7.5, 0)], '#f1dfae');
       c.save();
       const s = this.TW / 200;
       c.setTransform(this.dpr * s, this.dpr * s * 0.5, -this.dpr * s, this.dpr * s * 0.5, this.dpr * this.ox, this.dpr * this.oy);
@@ -646,18 +664,19 @@
       c.lineJoin = 'round';
       c.lineWidth = 14;
       c.strokeStyle = 'rgba(46,92,46,0.35)';
-      c.strokeText('ATLAS', 456, 301);
-      c.strokeText('TYCOON', 456, 401);
+      const L = 100 * OFF;
+      c.strokeText('ATLAS', 456 + L, 301 + L);
+      c.strokeText('TYCOON', 456 + L, 401 + L);
       c.fillStyle = '#fff6df';
-      c.fillText('ATLAS', 450, 295);
-      c.fillText('TYCOON', 450, 395);
+      c.fillText('ATLAS', 450 + L, 295 + L);
+      c.fillText('TYCOON', 450 + L, 395 + L);
       c.restore();
-      this.ellipse(6.45, 6.35, 0, 1.0, '#e9dbb0');
-      this.ellipse(6.45, 6.35, 0, 0.9, '#4fb6d3');
-      this.ellipse(6.4, 6.3, 0, 0.72, '#7fd3e6');
-      [[6.0, 6.7], [6.9, 5.95], [6.2, 5.95]].forEach(([x, y]) => this.ellipse(x, y, 0.01, 0.07, '#5aa858'));
+      this.ellipse(6.45 + OFF, 6.35 + OFF, 0, 1.0, '#e9dbb0');
+      this.ellipse(6.45 + OFF, 6.35 + OFF, 0, 0.9, '#4fb6d3');
+      this.ellipse(6.4 + OFF, 6.3 + OFF, 0, 0.72, '#7fd3e6');
+      [[6.0, 6.7], [6.9, 5.95], [6.2, 5.95]].forEach(([x, y]) => this.ellipse(x + OFF, y + OFF, 0.01, 0.07, '#5aa858'));
       const ripple = (now / 2200) % 1;
-      const [rx, ry] = P(6.4, 6.3, 0.01);
+      const [rx, ry] = P(6.4 + OFF, 6.3 + OFF, 0.01);
       c.strokeStyle = `rgba(255,255,255,${0.5 * (1 - ripple)})`;
       c.lineWidth = 1.2;
       c.beginPath(); c.ellipse(rx, ry, this.TW * 0.6 * ripple, this.TW * 0.3 * ripple, 0, 0, Math.PI * 2); c.stroke();
@@ -665,18 +684,18 @@
       // Trees, flowers and the fountain join the depth-sorted pass.
       const trees = [[1.9, 5.3, 0], [2.5, 6.2, 1], [1.8, 6.9, 0], [3.0, 7.25, 0], [2.25, 7.45, 1], [6.9, 1.8, 1], [7.35, 2.5, 0],
         [5.9, 1.65, 0], [7.4, 3.4, 1], [4.4, 7.2, 0], [7.25, 4.75, 0], [1.75, 1.9, 1], [3.8, 6.55, 1]];
-      trees.forEach(([x, y, k]) => objects.push({ d: x + y, f: () => this.drawTree(x, y, 0, 0.15, k) }));
-      [[3.4, 5.4, 1], [5.2, 5.0, 2], [2.2, 2.6, 3], [5.0, 7.0, 4]].forEach(([x, y, sd]) => objects.push({ d: x + y - 0.3, f: () => this.drawFlowers(x, y, 0, sd) }));
-      objects.push({ d: 12.7, f: () => this.drawFountain(6.4, 6.3, now) });
+      trees.forEach(([x, y, k]) => objects.push({ d: x + y + 2 * OFF, f: () => this.drawTree(x + OFF, y + OFF, 0, 0.15, k) }));
+      [[3.4, 5.4, 1], [5.2, 5.0, 2], [2.2, 2.6, 3], [5.0, 7.0, 4]].forEach(([x, y, sd]) => objects.push({ d: x + y - 0.3 + 2 * OFF, f: () => this.drawFlowers(x + OFF, y + OFF, 0, sd) }));
+      objects.push({ d: 12.7 + 2 * OFF, f: () => this.drawFountain(6.4 + OFF, 6.3 + OFF, now) });
     }
 
     drawTile(t, objects) {
       const g = this.game;
-      const { x, y } = CELLS[t.id];
+      const r = RECTS[t.id];
       const tg = this.target && this.target.id === t.id ? this.target : null;
       // The destination tile eases up to 10% larger.
       const grow = tg ? 0.06 * ease(Math.min(1, (this.now - tg.t0) / 400)) : 0;
-      const x0 = x + GAP - grow, y0 = y + GAP - grow, x1 = x + 1 - GAP + grow, y1 = y + 1 - GAP + grow;
+      const x0 = r.x0 + GAP - grow, y0 = r.y0 + GAP - grow, x1 = r.x1 - GAP + grow, y1 = r.y1 - GAP + grow;
       const owner = t.owner >= 0 ? g.players[t.owner] : null;
       let top = CORNER_TOP[t.type] || '#fffaf0';
       let sideL = '#e8dcc3', sideR = '#d2c2a2';
@@ -700,27 +719,160 @@
       c.beginPath(); c.moveTo(...P(x0, y1, z)); c.lineTo(...P(x0, y0, z)); c.lineTo(...P(x1, y0, z)); c.stroke();
       c.strokeStyle = 'rgba(80,60,30,0.18)';
       c.beginPath(); c.moveTo(...P(x1, y0, z)); c.lineTo(...P(x1, y1, z)); c.lineTo(...P(x0, y1, z)); c.stroke();
-      if (t.type === 'city') {
-        const col = D.GROUPS[t.group].color;
-        const w = 0.2;
-        const band = {
-          y0: [[x0, y0], [x1, y0], [x1, y0 + w], [x0, y0 + w]],
-          y1: [[x0, y1 - w], [x1, y1 - w], [x1, y1], [x0, y1]],
-          x0: [[x0, y0], [x0 + w, y0], [x0 + w, y1], [x0, y1]],
-          x1: [[x1 - w, y0], [x1, y0], [x1, y1], [x1 - w, y1]],
-        }[INNER[t.side]];
-        this.poly(band.map(([a, b]) => P(a, b, z)), col);
-      }
+      this.drawGround(t, r, z);
+      this.drawCard(t, r, z);
       if (this.pick && !this.pick.has(t.id)) {
         this.poly([P(x0, y0, z), P(x1, y0, z), P(x1, y1, z), P(x0, y1, z)], 'rgba(20,30,60,0.35)');
       } else if (this.pick || this.flashId === t.id) {
         const a = 0.55 + Math.sin(this.now / 160) * 0.35;
         this.poly([P(x0, y0, z), P(x1, y0, z), P(x1, y1, z), P(x0, y1, z)], null, `rgba(255,214,80,${a})`, 3);
       }
-      const d = x + y;
-      if (tg) objects.push({ d: d + 0.4, f: () => this.drawTargetGlow(tg, x0, y0, x1, y1, z) });
-      objects.push({ d: d + 0.45, f: () => this.drawProp(t, x + 0.5, y + 0.5, z) });
-      objects.push({ d: d + 0.95, f: () => this.drawLabel(t, x + 0.5, y + 0.5, z) });
+      const [ax, ay] = this.anchor(t.id);
+      if (tg) objects.push({ d: r.cx + r.cy - 0.6, f: () => this.drawTargetGlow(tg, x0, y0, x1, y1, z) });
+      objects.push({ d: ax + ay, f: () => this.drawProp(t, r, z) });
+    }
+
+    anchor(id) {
+      const r = RECTS[id];
+      return r.axis ? at(r, 0, C * 0.26) : [r.cx - 0.15, r.cy - 0.15];
+    }
+
+    quad(r, a0, d0, a1, d1, z) {
+      const P = this.P.bind(this);
+      return [at(r, a0, d0), at(r, a1, d0), at(r, a1, d1), at(r, a0, d1)].map(([x, y]) => P(x, y, z));
+    }
+
+    // Flat paint on a tile (beach, landing pad, painted arrow) drawn before anything stands on it.
+    drawGround(t, r, z) {
+      const c = this.ctx;
+      const now = this.now;
+      switch (t.type) {
+        case 'resort': {
+          // Sea along the back edge, then sand.
+          this.poly(this.quad(r, -0.46, 0.05, 0.46, 0.34, z), '#5cc8e0');
+          this.poly(this.quad(r, -0.46, 0.3, 0.46, 0.82, z), '#f3dca2');
+          for (let i = 0; i < 3; i++) {
+            const ph = ((now / 1800) + i / 3) % 1;
+            const [a, b] = [at(r, -0.4, 0.1 + ph * 0.2), at(r, 0.4, 0.1 + ph * 0.2)].map(([x, y]) => this.P(x, y, z));
+            c.strokeStyle = `rgba(255,255,255,${0.7 * (1 - ph)})`;
+            c.lineWidth = Math.max(1, this.TW * 0.012);
+            c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+          }
+          return;
+        }
+        case 'chance': {
+          // A soft golden spotlight under the floating box.
+          const [x, y] = this.anchor(t.id);
+          this.ellipse(x, y, z, 0.42, 'rgba(255,205,70,0.25)');
+          this.ellipse(x, y, z, 0.24, 'rgba(255,205,70,0.35)');
+          return;
+        }
+        case 'tax': {
+          // Road with lane markings through the checkpoint.
+          this.poly(this.quad(r, -0.46, 0.12, 0.46, 0.62, z), '#8d93a3');
+          for (let i = 0; i < 4; i++) this.poly(this.quad(r, -0.4 + i * 0.22, 0.35, -0.3 + i * 0.22, 0.39, z), '#f4f1e6');
+          return;
+        }
+        case 'start': {
+          const pts = [[0.2, 0.42], [0.55, 0.42], [0.55, 0.3], [0.82, 0.5], [0.55, 0.7], [0.55, 0.58], [0.2, 0.58]];
+          // Arrow points along -x (towards tile 1), drawn bigger on the corner tile.
+          this.poly(pts.map(([u, v]) => this.P(r.cx + 0.75 - u * 1.4, r.cy - 0.55 + v * 1.1, z)), '#e8553d');
+          return;
+        }
+        case 'island':
+          this.ellipse(r.cx - 0.1, r.cy - 0.1, z, 0.75, '#6fcde0');
+          this.ellipse(r.cx - 0.1, r.cy - 0.1, z, 0.55, '#f0cf86');
+          return;
+        case 'worldTour': {
+          // Landing pad with a dashed ring.
+          const [x, y] = [r.cx - 0.15, r.cy + 0.05];
+          this.ellipse(x, y, z, 0.62, '#4b5470');
+          this.ellipse(x, y, z, 0.54, '#5b6584');
+          const [sx, sy] = this.P(x, y, z);
+          c.save();
+          c.setLineDash([this.TW * 0.06, this.TW * 0.05]);
+          c.strokeStyle = '#ffd23f';
+          c.lineWidth = Math.max(1.5, this.TW * 0.02);
+          c.beginPath(); c.ellipse(sx, sy, this.TW * 0.3, this.TW * 0.15, 0, 0, Math.PI * 2); c.stroke();
+          c.restore();
+          return;
+        }
+        case 'festival':
+          this.poly(this.quad(r, -0.65, -0.62, 0.45, 0.05, z), '#7a4a6a');
+          return;
+      }
+    }
+
+    // A card printed on the tile surface: coloured header (country or tile type), the name, and the
+    // rent once someone owns it. Drawn in the tile's own plane so it reads like a printed label.
+    drawCard(t, r, z) {
+      const c = this.ctx;
+      const owner = t.owner >= 0 ? this.game.players[t.owner] : null;
+      const lab = this.labels ? this.labels(t) : { title: t.type === 'city' ? D.GROUPS[t.group].name : t.type, name: t.name, note: '' };
+      const color = t.type === 'city' ? D.GROUPS[t.group].color : CARD_COLOR[t.type] || '#666';
+      const ex = [this.TW / 2, this.TH / 2], ey = [-this.TW / 2, this.TH / 2];
+      let u, v, cxw, cyw, wW, hW;
+      if (!r.axis) {
+        // Corner tiles: a plaque across the front of the tile.
+        u = ex; v = ey;
+        cxw = r.cx + 0.12; cyw = r.y1 - 0.34; wW = C - 0.4; hW = 0.5;
+      } else {
+        const d0 = C * 0.47, d1 = C - 0.06;
+        [cxw, cyw] = at(r, 0, (d0 + d1) / 2);
+        wW = 1 - 0.1; hW = d1 - d0;
+        if (r.axis === 'y') { u = ex; v = ey; } else { u = [-ey[0], -ey[1]]; v = ex; }
+      }
+      const [ox, oy] = this.P(cxw, cyw, z);
+      const k = this.dpr / 100;
+      const W = wW * 100, H = hW * 100;
+      c.save();
+      c.setTransform(k * u[0], k * u[1], k * v[0], k * v[1], this.dpr * ox, this.dpr * oy);
+      c.fillStyle = 'rgba(60,40,20,0.2)';
+      c.beginPath(); c.roundRect(-W / 2, -H / 2 + 3, W, H, 8); c.fill();
+      c.fillStyle = '#fffdf6';
+      c.beginPath(); c.roundRect(-W / 2, -H / 2, W, H, 8); c.fill();
+      c.save();
+      c.clip();
+      const hh = Math.min(22, H * 0.28);
+      c.fillStyle = color;
+      c.fillRect(-W / 2, -H / 2, W, hh);
+      c.restore();
+      c.strokeStyle = 'rgba(60,40,20,0.25)';
+      c.lineWidth = 1.2;
+      c.beginPath(); c.roundRect(-W / 2, -H / 2, W, H, 8); c.stroke();
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      const fit = (text, font, max, size) => {
+        c.font = `${font} ${size}px ${font.includes('700') ? this.fonts.body : this.fonts.display}`;
+        const w = c.measureText(text).width;
+        if (w > max) { size = Math.max(7, size * max / w); c.font = `${font} ${size}px ${font.includes('700') ? this.fonts.body : this.fonts.display}`; }
+        return size;
+      };
+      // Header: country or tile type.
+      fit(lab.title.toLocaleUpperCase(document.documentElement.lang || undefined), '700', W - 8, 14);
+      c.fillStyle = '#ffffff';
+      c.fillText(lab.title.toLocaleUpperCase(document.documentElement.lang || undefined), 0, -H / 2 + hh / 2 + 0.5);
+      const bodyTop = -H / 2 + hh, bodyH = H - hh;
+      const value = (t.type === 'city' || t.type === 'resort') && owner ? '$' + this.game.rent(t).toLocaleString('en-US') : lab.note;
+      // Name.
+      fit(lab.name, '700', W - 6, 24);
+      c.fillStyle = '#232845';
+      c.fillText(lab.name, 0, value ? bodyTop + bodyH * 0.3 : bodyTop + bodyH * 0.5);
+      if (value) {
+        const isRent = !!owner;
+        const size = fit(value, '400', W - 14, isRent ? 25 : 16);
+        const pw = c.measureText(value).width + 14, ph = size + 6;
+        const py = bodyTop + bodyH * 0.72;
+        if (isRent) {
+          c.fillStyle = owner.color;
+          c.beginPath(); c.roundRect(-pw / 2, py - ph / 2, pw, ph, ph / 2); c.fill();
+          c.fillStyle = '#ffffff';
+        } else {
+          c.fillStyle = '#5a6285';
+        }
+        c.fillText(value, 0, py + 1);
+      }
+      c.restore();
     }
 
     drawTargetGlow(tg, x0, y0, x1, y1, z) {
@@ -743,11 +895,13 @@
       c.restore();
     }
 
-    drawProp(t, cx, cy, z) {
+    drawProp(t, r, z) {
       const g = this.game;
       const owner = t.owner >= 0 ? g.players[t.owner] : null;
       const now = this.now;
-      const bx = cx - 0.12, by = cy - 0.12;
+      const c = this.ctx;
+      const [bx, by] = this.anchor(t.id);
+      const pt = (along, depth) => at(r, along, depth);
       switch (t.type) {
         case 'city': {
           if (!owner) return;
@@ -759,55 +913,183 @@
           if (g.festival === t.id) this.drawStar(bx, by, z + [0.7, 0.75, 1.15, 1.35, 2.0][t.level] * s, 0.13);
           return;
         }
-        case 'resort':
-          this.drawPalm(bx + 0.05, by - 0.05, z, 0.7);
-          this.drawUmbrella(bx + 0.28, by + 0.1, z);
-          if (owner) this.drawFlag(bx - 0.22, by + 0.15, z, owner.color, 0.5);
+        case 'resort': {
+          const [px, py] = pt(-0.25, 0.42);
+          this.drawPalm(px, py, z, 0.8);
+          const [ux, uy] = pt(0.2, 0.48);
+          this.drawUmbrella(ux, uy, z);
+          // Sun lounger.
+          const [lx, ly] = pt(0.14, 0.66);
+          this.box(lx - 0.13, ly - 0.06, lx + 0.13, ly + 0.06, z, z + 0.05, '#ffffff', '#e2e6ee', '#c9cfdb');
+          this.box(lx - 0.13, ly - 0.06, lx - 0.04, ly + 0.06, z + 0.05, z + 0.13, '#5cc0e0', '#4aa8c8', '#3a8fae');
+          if (owner) { const [fx, fy] = pt(0.36, 0.22); this.drawFlag(fx, fy, z, owner.color, 0.55); }
           if (g.festival === t.id) this.drawStar(bx, by, z + 1.0, 0.13);
           return;
-        case 'chance': {
-          const bob = Math.sin(now / 400 + t.id) * 0.06;
-          const zz = z + 0.35 + bob;
-          const r = 0.15;
-          this.ellipse(cx, cy, z, 0.18, 'rgba(0,0,0,0.12)');
-          this.box(cx - r, cy - r, cx + r, cy + r, zz, zz + r * 1.6, '#ffd75e', '#f0b532', '#d39420', 'rgba(120,70,0,0.3)');
-          const [sx, sy] = this.P(cx, cy, zz + r * 1.6);
-          this.text('?', sx, sy + 1, this.TW * 0.16, '#8a5a00', this.fonts.display);
-          return;
         }
-        case 'tax':
+        case 'chance': {
+          // Floating gift box with a ribbon, a big question mark and orbiting sparkles.
+          const bob = Math.sin(now / 420 + t.id) * 0.07;
+          const zz = z + 0.42 + bob, rr = 0.17, h = 0.3;
+          this.ellipse(bx, by, z, 0.2 * (1 - bob), 'rgba(0,0,0,0.14)');
+          this.box(bx - rr, by - rr, bx + rr, by + rr, zz, zz + h, '#ffd75e', '#f0b532', '#d39420', 'rgba(120,70,0,0.3)');
+          this.box(bx - 0.04, by - rr - 0.005, bx + 0.04, by + rr + 0.005, zz, zz + h + 0.005, '#e8553d', '#d4432c', '#b53620');
+          this.box(bx - rr - 0.005, by - 0.04, bx + rr + 0.005, by + 0.04, zz, zz + h + 0.005, '#e8553d', '#d4432c', '#b53620');
+          const [sx, sy] = this.P(bx, by, zz + h + 0.25);
+          c.lineWidth = Math.max(2, this.TW * 0.03);
+          c.strokeStyle = '#ffffff';
+          c.font = `${Math.round(this.TW * 0.3)}px ${this.fonts.display}`;
+          c.textAlign = 'center';
+          c.textBaseline = 'middle';
+          c.strokeText('?', sx, sy);
+          c.fillStyle = '#e0a21b';
+          c.fillText('?', sx, sy);
           for (let i = 0; i < 4; i++) {
-            this.ellipse(cx - 0.05, cy - 0.05, z + i * 0.09, 0.2, '#c99419');
-            this.ellipse(cx - 0.05, cy - 0.05, z + i * 0.09 + 0.05, 0.2, '#ffd34d');
+            const a = now / 900 + (i * Math.PI) / 2;
+            this.sparkle(bx + Math.cos(a) * 0.32, by + Math.sin(a) * 0.32, zz + 0.15 + Math.sin(a * 2) * 0.1, 0.05);
           }
           return;
-        case 'start': {
-          const P = this.P.bind(this);
-          const pts = [[0.2, 0.42], [0.55, 0.42], [0.55, 0.3], [0.82, 0.5], [0.55, 0.7], [0.55, 0.58], [0.2, 0.58]];
-          // Arrow points along -x (towards tile 1).
-          this.poly(pts.map(([u, v]) => P(cx + 0.5 - u, cy - 0.5 + v, z)), '#e8553d');
+        }
+        case 'tax': {
+          // Customs checkpoint: booth with a striped roof, a barrier arm and a pile of coins.
+          const [kx, ky] = pt(-0.22, 0.3);
+          this.groundShadow(kx - 0.14, ky - 0.14, kx + 0.14, ky + 0.14, z, 0.5);
+          this.box(kx - 0.14, ky - 0.14, kx + 0.14, ky + 0.14, z, z + 0.42, '#f4f6fb', '#e3e7f0', '#c7cede', 'rgba(0,0,0,0.15)');
+          this.box(kx - 0.141, ky - 0.141, kx + 0.141, ky + 0.141, z + 0.2, z + 0.32, '#8fd0ff', '#7dbff0', '#5fa3d8');
+          this.box(kx - 0.19, ky - 0.19, kx + 0.19, ky + 0.19, z + 0.42, z + 0.5, '#c0392b', '#e04b3b', '#a5301f');
+          const [px, py] = pt(0.1, 0.36);
+          const [ex, ey] = pt(0.46, 0.36);
+          const base = this.P(px, py, z), top = this.P(px, py, z + 0.3);
+          c.strokeStyle = '#4b5470';
+          c.lineWidth = Math.max(2, this.TW * 0.03);
+          c.beginPath(); c.moveTo(base[0], base[1]); c.lineTo(top[0], top[1]); c.stroke();
+          const lift = Math.max(0, Math.sin(now / 1600)) * 0.25;
+          for (let i = 0; i < 6; i++) {
+            const k0 = i / 6, k1 = (i + 1) / 6;
+            const a = this.P(px + (ex - px) * k0, py + (ey - py) * k0, z + 0.28 + lift * k0);
+            const b = this.P(px + (ex - px) * k1, py + (ey - py) * k1, z + 0.28 + lift * k1);
+            c.strokeStyle = i % 2 ? '#ffffff' : '#e8553d';
+            c.lineWidth = Math.max(2.5, this.TW * 0.035);
+            c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+          }
+          const [cx2, cy2] = pt(0.3, 0.68);
+          for (let i = 0; i < 3; i++) {
+            this.ellipse(cx2, cy2, z + i * 0.06, 0.13, '#c99419');
+            this.ellipse(cx2, cy2, z + i * 0.06 + 0.035, 0.13, '#ffd34d');
+          }
           return;
         }
-        case 'island':
-          this.ellipse(cx, cy, z, 0.36, '#f0cf86');
-          this.drawPalm(cx - 0.05, cy - 0.05, z + 0.03, 0.95);
+        case 'start': {
+          // A start arch with a banner.
+          const zA = z, h = 0.95;
+          const pL = [r.cx - 0.55, r.cy - 0.45], pR = [r.cx + 0.45, r.cy - 0.45];
+          [pL, pR].forEach(([x, y]) => this.box(x - 0.05, y - 0.05, x + 0.05, y + 0.05, zA, zA + h, '#f4f6fb', '#dde2ec', '#c3cad9'));
+          this.box(pL[0] - 0.05, pL[1] - 0.04, pR[0] + 0.05, pR[1] + 0.04, zA + h - 0.26, zA + h, '#e8553d', '#e8553d', '#c43d27', 'rgba(0,0,0,0.2)');
+          const [sx, sy] = this.P((pL[0] + pR[0]) / 2, pL[1] + 0.04, zA + h - 0.13);
+          c.save();
+          c.font = `${Math.round(this.TW * 0.14)}px ${this.fonts.display}`;
+          c.textAlign = 'center';
+          c.textBaseline = 'middle';
+          c.fillStyle = '#ffffff';
+          const label = this.labels ? this.labels(t).title : t.name;
+          // Sheared to sit on the banner's front face.
+          c.translate(sx, sy);
+          c.transform(1, -0.5, 0, 1, 0, 0);
+          c.fillText(label.toLocaleUpperCase(document.documentElement.lang || undefined), 0, 0);
+          c.restore();
           return;
-        case 'festival':
-          this.drawFlag(cx - 0.1, cy - 0.1, z, '#d65a7a', 1.1);
-          this.drawStar(cx - 0.1, cy - 0.1, z + 1.25 + Math.sin(now / 300) * 0.04, 0.18);
+        }
+        case 'island': {
+          this.drawPalm(r.cx - 0.25, r.cy - 0.2, z + 0.03, 1.0);
+          this.drawPalm(r.cx + 0.05, r.cy - 0.45, z + 0.03, 0.7);
+          // A little rowing boat bobbing in the water.
+          const bob = Math.sin(now / 700) * 0.03;
+          const [bx2, by2] = [r.cx + 0.45, r.cy + 0.1];
+          this.box(bx2 - 0.18, by2 - 0.07, bx2 + 0.18, by2 + 0.07, z + bob, z + 0.08 + bob, '#a0643a', '#8a5330', '#6e4024');
           return;
+        }
+        case 'festival': {
+          // A stage with a curtain, spotlights, bunting and fireworks.
+          const [x0, y0] = [r.cx - 0.6, r.cy - 0.6];
+          this.box(x0, y0, x0 + 1.05, y0 + 0.62, z, z + 0.12, '#b98a5e', '#a87a50', '#8d6440');
+          this.box(x0, y0, x0 + 1.05, y0 + 0.06, z + 0.12, z + 0.95, '#c62f4a', '#a52740', '#8a1f35', 'rgba(0,0,0,0.2)');
+          const P = this.P.bind(this);
+          for (let i = 0; i < 5; i++) {
+            const a = P(x0 + i * 0.21 + 0.02, y0 + 0.065, z + 0.95), b = P(x0 + i * 0.21 + 0.19, y0 + 0.065, z + 0.95);
+            c.fillStyle = '#e5486a';
+            c.beginPath(); c.moveTo(a[0], a[1]); c.quadraticCurveTo((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + this.TW * 0.08, b[0], b[1]); c.fill();
+          }
+          // Spotlight beams.
+          [[x0 + 0.15, '#fff3a8'], [x0 + 0.9, '#a8e6ff']].forEach(([x, col], i) => {
+            const top = P(x, y0 + 0.62, z + 1.3), l = P(x - 0.2 + i * 0.1, y0 + 0.35, z + 0.12), rr2 = P(x + 0.05 + i * 0.1, y0 + 0.45, z + 0.12);
+            c.fillStyle = col;
+            c.globalAlpha = 0.22 + Math.sin(now / 500 + i) * 0.08;
+            c.beginPath(); c.moveTo(top[0], top[1]); c.lineTo(l[0], l[1]); c.lineTo(rr2[0], rr2[1]); c.closePath(); c.fill();
+            c.globalAlpha = 1;
+          });
+          // Bunting from the stage to a pole at the front.
+          const pole = [r.cx + 0.55, r.cy + 0.45];
+          const pb = P(pole[0], pole[1], z), ptp = P(pole[0], pole[1], z + 1.0);
+          c.strokeStyle = '#6b5a4a';
+          c.lineWidth = Math.max(1.5, this.TW * 0.02);
+          c.beginPath(); c.moveTo(pb[0], pb[1]); c.lineTo(ptp[0], ptp[1]); c.stroke();
+          const st = P(x0 + 1.05, y0 + 0.06, z + 0.95);
+          const cols = ['#ffd23f', '#4fb6d3', '#2eae6b', '#e8553d', '#b38cff'];
+          for (let i = 0; i < 7; i++) {
+            const k0 = i / 7, k1 = (i + 0.7) / 7;
+            const sag = (k) => Math.sin(Math.PI * k) * this.TW * 0.12;
+            const a = [st[0] + (ptp[0] - st[0]) * k0, st[1] + (ptp[1] - st[1]) * k0 + sag(k0)];
+            const b = [st[0] + (ptp[0] - st[0]) * k1, st[1] + (ptp[1] - st[1]) * k1 + sag(k1)];
+            c.fillStyle = cols[i % cols.length];
+            c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.lineTo((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + this.TW * 0.07); c.closePath(); c.fill();
+          }
+          this.drawStar(x0 + 0.52, y0 + 0.03, z + 1.25 + Math.sin(now / 300) * 0.04, 0.17);
+          this.fireworks(r.cx, r.cy, z, now);
+          return;
+        }
         case 'worldTour': {
           const bob = Math.sin(now / 900) * 0.05;
-          const [mx, my] = this.drawMast(cx + 0.12, cy - 0.12, z, 0.85);
+          const [mx, my] = this.drawMast(r.cx + 0.35, r.cy - 0.35, z, 0.95);
           const L = this.TW * 0.62;
-          const bx = mx - L * 0.53, by = my + this.TW * 0.04 + bob * this.ZS;
-          // Shadow of the airship on the dock.
-          const [gx, gy] = this.P(cx - 0.25, cy + 0.15, z);
-          this.ctx.fillStyle = 'rgba(30,30,60,0.14)';
-          this.ctx.beginPath(); this.ctx.ellipse(gx, gy, L * 0.42, L * 0.12, 0, 0, Math.PI * 2); this.ctx.fill();
-          this.drawBlimp(bx, by);
+          const bx3 = mx - L * 0.53, by3 = my + this.TW * 0.04 + bob * this.ZS;
+          const [gx, gy] = this.P(r.cx - 0.2, r.cy + 0.05, z);
+          c.fillStyle = 'rgba(30,30,60,0.16)';
+          c.beginPath(); c.ellipse(gx, gy, L * 0.42, L * 0.12, 0, 0, Math.PI * 2); c.fill();
+          this.drawBlimp(bx3, by3);
           return;
         }
+      }
+    }
+
+    sparkle(x, y, z, r) {
+      const [sx, sy] = this.P(x, y, z);
+      const c = this.ctx, R = r * this.TW;
+      c.fillStyle = '#fff7c2';
+      c.beginPath();
+      c.moveTo(sx, sy - R); c.lineTo(sx + R * 0.25, sy - R * 0.25); c.lineTo(sx + R, sy); c.lineTo(sx + R * 0.25, sy + R * 0.25);
+      c.lineTo(sx, sy + R); c.lineTo(sx - R * 0.25, sy + R * 0.25); c.lineTo(sx - R, sy); c.lineTo(sx - R * 0.25, sy - R * 0.25);
+      c.closePath();
+      c.fill();
+    }
+
+    // Bursts of fireworks above the Gala stage, one every couple of seconds.
+    fireworks(x, y, z, now) {
+      const c = this.ctx;
+      const cols = ['#ffd23f', '#ff6b8a', '#6fe0ff', '#9dff8a'];
+      for (let b = 0; b < 2; b++) {
+        const cycle = 2600, t = (now + b * 1300) % cycle;
+        if (t > 1100) continue;
+        const k = t / 1100;
+        const n = Math.floor((now + b * 1300) / cycle);
+        const ox = x - 0.4 + ((n * 37 + b * 11) % 9) / 10, oy = y - 0.5 + ((n * 23) % 5) / 10;
+        const [sx, sy] = this.P(ox, oy, z + 1.9 + b * 0.3);
+        c.fillStyle = cols[(n + b) % cols.length];
+        c.globalAlpha = 1 - k;
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          const d = ease(k) * this.TW * 0.35;
+          c.beginPath(); c.arc(sx + Math.cos(a) * d, sy + Math.sin(a) * d * 0.85 + k * k * this.TW * 0.1, Math.max(1.2, this.TW * 0.018), 0, Math.PI * 2); c.fill();
+        }
+        c.globalAlpha = 1;
       }
     }
 
@@ -1224,59 +1506,6 @@
       c.textBaseline = 'middle';
       c.fillStyle = color;
       c.fillText(str, x, y);
-    }
-
-    drawLabel(t, cx, cy, z) {
-      const g = this.game;
-      const owner = t.owner >= 0 ? g.players[t.owner] : null;
-      const c = this.ctx;
-      const [sx, sy] = this.P(cx + 0.24, cy + 0.24, z);
-      const big = this.TW >= 58;
-      const name = this.nameOf ? this.nameOf(t.id) : t.name;
-      const fs = Math.max(9, Math.min(16, this.TW * 0.125));
-      const pf = Math.max(11, Math.min(20, this.TW * 0.165));
-      if (t.id % 8 === 0) {
-        if (big) {
-          c.lineWidth = 3;
-          c.strokeStyle = 'rgba(255,255,255,0.85)';
-          c.font = `${Math.round(fs * 1.05)}px ${this.fonts.display}`;
-          c.textAlign = 'center';
-          c.textBaseline = 'middle';
-          c.strokeText(name, sx, sy);
-          this.text(name, sx, sy, fs * 1.05, '#2a2f4f', this.fonts.display);
-        }
-        return;
-      }
-      let value = null;
-      // On small boards only rents are shown; prices are one tap away in the tile card.
-      // Only owned properties show a number: the rent a visitor pays. Prices live in the tile card.
-      if ((t.type === 'city' || t.type === 'resort') && owner) value = g.rent(t);
-      const pillY = big ? sy + pf * 0.62 : sy;
-      const nameY = value != null ? sy - pf * 0.55 : sy;
-      if (big) {
-        c.lineWidth = 3;
-        c.strokeStyle = 'rgba(255,250,240,0.9)';
-        c.font = `600 ${Math.round(fs)}px ${this.fonts.body}`;
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.strokeText(name, sx, nameY);
-        this.text(name, sx, nameY, fs, '#232845', this.fonts.body, 600);
-      }
-      if (value != null) {
-        const label = '$' + value.toLocaleString('en-US');
-        c.font = `${Math.round(pf)}px ${this.fonts.display}`;
-        const w = c.measureText(label).width + pf * 0.9, h = pf * 1.3;
-        // Pill with a darker lip and a white rim so it reads on any tile colour.
-        const fill = owner ? owner.color : '#2b3157';
-        c.fillStyle = shade(fill.startsWith('#') ? fill : '#2b3157', -0.35);
-        c.beginPath(); c.roundRect(sx - w / 2, pillY - h / 2 + 2, w, h, h / 2); c.fill();
-        c.fillStyle = fill;
-        c.beginPath(); c.roundRect(sx - w / 2, pillY - h / 2, w, h, h / 2); c.fill();
-        c.strokeStyle = 'rgba(255,255,255,0.9)';
-        c.lineWidth = 1.5;
-        c.stroke();
-        this.text(label, sx, pillY + 1, pf, '#ffffff', this.fonts.display);
-      }
     }
 
     drawPuffs(now) {

@@ -77,7 +77,8 @@
     r_triple: 'Triple Monopoly', r_line: 'Line Monopoly', r_resort: 'Resort Monopoly', r_last: 'Last One Standing', r_richest: 'Richest after {n} rounds',
     // levels, groups, special tiles
     levels: ['Plot', 'Villa', 'Tower', 'Hotel', 'Landmark'],
-    groups: ['Mossland', 'Dunes', 'Lakes', 'Steppe', 'Highlands', 'Jungle', 'Metro', 'Capitals'],
+    groups: ['Egypt', 'Brazil', 'India', 'Turkey', 'Spain', 'Japan', 'United Kingdom', 'USA'],
+    resort: 'Resort', cardDraw: 'Draw a card', taxNote: '10% tax', startNote: 'Collect $300', islandNote: 'Stranded', galaNote: 'Rent ×2', tourNote: 'Fly anywhere',
     tiles: {},
     // log
     l_sell: '{p} sells {tile} for {m}.', l_bankrupt: '{p} is bankrupt!', l_bankruptTo: '{p} is bankrupt (owed {o})!',
@@ -151,7 +152,12 @@
     doubles: 'ÇİFT!', fortune: 'Şans', wins: '{p} kazandı!', bankrupt: 'İflas', backToMenu: 'Ana menüye dön',
     r_triple: 'Üçlü Tekel', r_line: 'Hat Tekeli', r_resort: 'Tatil Tekeli', r_last: 'Ayakta Kalan Son Oyuncu', r_richest: '{n} tur sonunda en zengin',
     levels: ['Arsa', 'Villa', 'Kule', 'Otel', 'Simge Yapı'],
-    groups: ['Yosunlu', 'Kumullar', 'Göller', 'Bozkır', 'Yaylalar', 'Orman', 'Metropol', 'Başkentler'],
+    groups: ['Mısır', 'Brezilya', 'Hindistan', 'Türkiye', 'İspanya', 'Japonya', 'Birleşik Krallık', 'ABD'],
+    resort: 'Tatil yeri', cardDraw: 'Kart çek', taxNote: '%10 vergi', startNote: '$300 al', islandNote: 'Mahsur kal', galaNote: 'Kira ×2', tourNote: 'İstediğin yere uç',
+    cities: {
+      Alexandria: 'İskenderiye', Cairo: 'Kahire', Delhi: 'Delhi', Izmir: 'İzmir', Istanbul: 'İstanbul', Seville: 'Sevilla',
+      Barcelona: 'Barselona', London: 'Londra', Maldives: 'Maldivler',
+    },
     tiles: { start: 'Başlangıç', island: 'Issız Ada', festival: 'Büyük Gala', worldTour: 'Zeplin İskelesi', chance: 'Şans', tax: 'Gümrük' },
     l_sell: '{p}, {tile} mülkünü {m} karşılığında sattı.', l_bankrupt: '{p} iflas etti!', l_bankruptTo: '{p} iflas etti ({o} oyuncusuna borçluydu)!',
     l_salary: '{p} Başlangıç\'tan geçti ve {m} aldı.', l_island: '{p} Issız Ada\'da mahsur kaldı.',
@@ -190,7 +196,8 @@
   function tileName(l, id) {
     const t = D.TILES[id];
     if (!t) return '';
-    return (DICTS[l].tiles && DICTS[l].tiles[t.type]) || t.name;
+    const dict = DICTS[l];
+    return (dict.tiles && dict.tiles[t.type]) || (dict.cities && dict.cities[t.name]) || t.name;
   }
 
   function tFor(l, key, params) {

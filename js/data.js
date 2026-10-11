@@ -22,15 +22,16 @@
   const RENT_MULT = [0.3, 0.9, 1.8, 3, 5];
   const RESORT_RENT = [50, 100, 200, 400];
 
+  // Each group is a country; its cities sit next to each other on the board.
   const GROUPS = [
-    { name: 'Mossland', color: '#7a9e3d', price: 60 },
-    { name: 'Dunes', color: '#d9a441', price: 90 },
-    { name: 'Lakes', color: '#3d9bc4', price: 120 },
-    { name: 'Steppe', color: '#a9744f', price: 150 },
-    { name: 'Highlands', color: '#7d6bb8', price: 180 },
-    { name: 'Jungle', color: '#2f9e6e', price: 220 },
-    { name: 'Metro', color: '#d65a7a', price: 260 },
-    { name: 'Capitals', color: '#c4422f', price: 320 },
+    { name: 'Egypt', color: '#c9a14a', price: 60 },
+    { name: 'Brazil', color: '#2e9e5b', price: 90 },
+    { name: 'India', color: '#e2823a', price: 120 },
+    { name: 'Turkey', color: '#d8434b', price: 150 },
+    { name: 'Spain', color: '#8e5bd0', price: 180 },
+    { name: 'Japan', color: '#e05b8f', price: 220 },
+    { name: 'United Kingdom', color: '#3d7fc4', price: 260 },
+    { name: 'USA', color: '#2c3f86', price: 320 },
   ];
 
   const c = (name, group, bump) => ({ type: 'city', name, group, price: Math.round(GROUPS[group].price * (bump ? 1.1 : 1) / 10) * 10 });
@@ -40,13 +41,13 @@
   // 32 tiles, clockwise from Departure. Each side has 7 tiles between corners.
   const LAYOUT = [
     s('start', 'Departure'),
-    c('Fernhollow', 0), r('Coral Beach'), c('Brackenby', 0, true), s('chance', 'Fortune'), c('Sunhaven', 1), c('Duneport', 1), c('Mirage Bay', 1, true),
+    c('Alexandria', 0), c('Cairo', 0, true), s('chance', 'Fortune'), c('Salvador', 1), c('São Paulo', 1), c('Rio de Janeiro', 1, true), r('Bali'),
     s('island', 'Castaway Isle'),
-    c('Lakemoor', 2), c('Glassbrook', 2), s('chance', 'Fortune'), c('Reedwater', 2, true), r('Pine Lodge'), c('Windcrest', 3), c('Highplain', 3, true),
+    c('Bangalore', 2), c('Delhi', 2), c('Mumbai', 2, true), r('Maldives'), c('Izmir', 3), c('Istanbul', 3, true), s('chance', 'Fortune'),
     s('festival', 'Grand Gala'),
-    c('Stonegate', 4), s('chance', 'Fortune'), c('Crag End', 4), c('Ironpeak', 4, true), r('Aurora Springs'), c('Verdanta', 5), c('Mangrove Cove', 5, true),
+    c('Seville', 4), c('Barcelona', 4), c('Madrid', 4, true), s('chance', 'Fortune'), c('Osaka', 5), c('Tokyo', 5, true), r('Santorini'),
     s('worldTour', 'Airship Dock'),
-    c('Neon Row', 6), c('Skyhold', 6), r('Lagoon Isle'), c('Gildport', 6, true), s('tax', 'Customs'), c('Crownspire', 7), c('Aurelia', 7, true),
+    c('Manchester', 6), c('Edinburgh', 6), c('London', 6, true), r('Bodrum'), s('tax', 'Customs'), c('Los Angeles', 7), c('New York', 7, true),
   ];
   const TILES = LAYOUT.map((t, id) => Object.assign({ id, side: Math.floor(id / 8) }, t));
 
