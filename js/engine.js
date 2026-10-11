@@ -2,10 +2,10 @@
 // callback and everything visible is reported through an async `onEvent` callback.
 (function (root, factory) {
   const isNode = typeof module === 'object' && module.exports;
-  const api = factory(isNode ? require('./data.js') : root.ATData);
+  const api = isNode ? factory(require('./data.js'), require('./i18n.js')) : factory(root.ATData, root.ATI18N);
   if (isNode) module.exports = api;
   else root.ATEngine = api;
-})(this, function (D) {
+})(this, function (D, I18N) {
   function mulberry32(a) {
     return function () {
       a |= 0; a = (a + 0x6d2b79f5) | 0;
@@ -83,7 +83,8 @@
     // ---------- helpers ----------
     rand(n) { return Math.floor(this.rng() * n); }
     emit(evt) { return Promise.resolve(this.onEvent(evt)); }
-    log(text) { return this.emit({ type: 'log', text }); }
+    // Log lines carry a key and params so each client can show them in its own language.
+    say(key, params) { return this.emit({ type: 'log', key, params: params || {}, text: I18N.tFor('en', key, params) }); }
     ask(p, req) { return Promise.resolve(this.decide(p, req, this)); }
     alive() { return this.players.filter((p) => !p.bankrupt); }
     owned(p) { return this.tiles.filter((t) => t.owner === p.id); }
@@ -176,7 +177,7 @@
         const got = Math.round(this.value(t) * this.rules.sellRate);
         this.release(t);
         p.cash += got;
-        await this.log(`${p.name} sells ${t.name} for ${fmt(got)}.`);
+        await this.say('l_sell', { p: p.name, tile: t.id, m: got });
         await this.emit({ type: 'tile', tile: t });
       }
     }
@@ -190,7 +191,7 @@
     async goBankrupt(p, creditor) {
       p.bankrupt = true;
       for (const t of this.owned(p)) { this.release(t); await this.emit({ type: 'tile', tile: t }); }
-      await this.log(`${p.name} is bankrupt${creditor ? ' (owed ' + creditor.name + ')' : ''}!`);
+      await this.say(creditor ? 'l_bankruptTo' : 'l_bankrupt', { p: p.name, o: creditor && creditor.name });
       await this.emit({ type: 'bankrupt', player: p });
       const alive = this.alive();
       if (alive.length === 1) await this.declareWinner(alive[0], 'Last One Standing');
@@ -214,7 +215,7 @@
           p.laps++;
           await this.emit({ type: 'move', player: p, path: path.splice(0) });
           await this.gain(p, this.rules.salary, 'salary');
-          await this.log(`${p.name} passes Departure and collects ${fmt(this.rules.salary)}.`);
+          await this.say('l_salary', { p: p.name, m: this.rules.salary });
         }
       }
       if (path.length) await this.emit({ type: 'move', player: p, path });
@@ -228,7 +229,7 @@
       p.pos = 8;
       p.islandTurns = this.rules.islandTurns;
       await this.emit({ type: 'move', player: p, path: [8], jump: true });
-      await this.log(`${p.name} is stranded on Castaway Isle.`);
+      await this.say('l_island', { p: p.name });
     }
 
     // ---------- turn flow ----------
@@ -263,16 +264,16 @@
         if (choice === 'pay') {
           await this.charge(p, this.rules.islandFine, null, 'island fine');
           p.islandTurns = 0;
-          await this.log(`${p.name} pays ${fmt(this.rules.islandFine)} to leave the island.`);
+          await this.say('l_payIsland', { p: p.name, m: this.rules.islandFine });
         } else {
           const [a, b] = await this.roll(p, true);
           if (a !== b) {
             p.islandTurns--;
-            await this.log(p.islandTurns ? `${p.name} stays on the island.` : `${p.name} will sail off next turn.`);
+            await this.say(p.islandTurns ? 'l_stay' : 'l_sailNext', { p: p.name });
             return;
           }
           p.islandTurns = 0;
-          await this.log(`${p.name} rolls doubles and escapes!`);
+          await this.say('l_escape', { p: p.name });
           await this.step(p, a + b);
           await this.resolveTile(p);
           return;
@@ -282,14 +283,14 @@
       for (;;) {
         const [a, b] = await this.roll(p);
         if (a === b && ++doubles === 3) {
-          await this.log(`${p.name} rolled three doubles in a row.`);
+          await this.say('l_threeDoubles', { p: p.name });
           await this.sendToIsland(p);
           return;
         }
         await this.step(p, a + b);
         await this.resolveTile(p);
         if (this.winner || p.bankrupt || p.islandTurns > 0 || a !== b) return;
-        await this.log(`Doubles! ${p.name} rolls again.`);
+        await this.say('l_again', { p: p.name });
       }
     }
 
@@ -301,7 +302,7 @@
         case 'chance': return this.drawCard(p);
         case 'tax': {
           const tax = Math.round((this.netWorth(p) * this.rules.taxRate) / 10) * 10;
-          await this.log(`${p.name} pays ${fmt(tax)} in customs duty.`);
+          await this.say('l_tax', { p: p.name, m: tax });
           return this.charge(p, tax, null, 'tax');
         }
         case 'island': return this.sendToIsland(p);
@@ -329,7 +330,7 @@
           if (await this.ask(p, { type: 'resort', tile: t, price: t.price })) {
             await this.charge(p, t.price, null, 'purchase');
             t.owner = p.id;
-            await this.log(`${p.name} buys ${t.name} for ${fmt(t.price)}.`);
+            await this.say('l_buyResort', { p: p.name, tile: t.id, m: t.price });
             await this.emit({ type: 'tile', tile: t });
             await this.afterAcquire(p);
           }
@@ -346,7 +347,7 @@
         await this.charge(p, opt.cost, null, 'purchase');
         t.owner = p.id;
         t.level = opt.level;
-        await this.log(`${p.name} buys ${t.name}` + (opt.level ? ` with a ${D.LEVEL_NAMES[opt.level]}` : '') + ` for ${fmt(opt.cost)}.`);
+        await this.say(opt.level ? 'l_buyWith' : 'l_buy', { p: p.name, tile: t.id, lv: opt.level, m: opt.cost });
         await this.emit({ type: 'tile', tile: t });
         return this.afterAcquire(p);
       }
@@ -355,10 +356,10 @@
 
       const owner = this.players[t.owner];
       let due = this.rent(t);
-      if (p.shield) { p.shield--; due = 0; await this.log(`${p.name}'s Rent Shield blocks the rent!`); }
-      else if (p.coupon) { p.coupon--; due = Math.round(due / 2); await this.log(`${p.name} uses a Half-Price Coupon.`); }
+      if (p.shield) { p.shield--; due = 0; await this.say('l_shield', { p: p.name }); }
+      else if (p.coupon) { p.coupon--; due = Math.round(due / 2); await this.say('l_coupon', { p: p.name }); }
       if (due > 0) {
-        await this.log(`${p.name} pays ${fmt(due)} rent to ${owner.name} at ${t.name}.`);
+        await this.say('l_rent', { p: p.name, o: owner.name, tile: t.id, m: due });
         if (!(await this.charge(p, due, owner, 'rent'))) return;
       }
       if (t.type !== 'city' || t.level >= 4) return;
@@ -368,7 +369,7 @@
       await this.charge(p, price, owner, 'buyout');
       if (this.festival === t.id) this.festival = -1;
       t.owner = p.id;
-      await this.log(`${p.name} buys out ${t.name} from ${owner.name} for ${fmt(price)}!`);
+      await this.say('l_buyout', { p: p.name, o: owner.name, tile: t.id, m: price });
       await this.emit({ type: 'tile', tile: t });
       await this.afterAcquire(p);
       if (!this.winner) await this.offerBuild(p, t);
@@ -383,7 +384,7 @@
       if (!opt) return;
       await this.charge(p, opt.cost, null, 'build');
       t.level = opt.level;
-      await this.log(`${p.name} builds a ${D.LEVEL_NAMES[opt.level]} in ${t.name} for ${fmt(opt.cost)}.`);
+      await this.say('l_build', { p: p.name, tile: t.id, lv: opt.level, m: opt.cost });
       await this.emit({ type: 'tile', tile: t });
     }
 
@@ -395,7 +396,7 @@
       const t = this.tiles[id];
       if (!t || !choices.includes(id)) return;
       t.level++;
-      await this.log(`${p.name} gets a free ${D.LEVEL_NAMES[t.level]} in ${t.name}.`);
+      await this.say('l_free', { p: p.name, tile: t.id, lv: t.level });
       await this.emit({ type: 'tile', tile: t });
     }
 
@@ -406,7 +407,7 @@
       if (!choices.includes(id)) return;
       const old = this.festival;
       this.festival = id;
-      await this.log(`${p.name} hosts the Grand Gala in ${this.tiles[id].name}: rent there is doubled!`);
+      await this.say('l_gala', { p: p.name, tile: id });
       if (old >= 0) await this.emit({ type: 'tile', tile: this.tiles[old] });
       await this.emit({ type: 'tile', tile: this.tiles[id] });
     }
@@ -418,7 +419,7 @@
       const dest = await this.ask(p, { type: 'worldTour', fee, choices });
       if (!choices.includes(dest)) return;
       await this.charge(p, fee, null, 'travel');
-      await this.log(`${p.name} flies to ${this.tiles[dest].name}.`);
+      await this.say('l_fly', { p: p.name, tile: dest });
       await this.moveTo(p, dest);
       return this.resolveTile(p);
     }
@@ -435,7 +436,7 @@
       const cardId = this.deck.pop();
       const card = D.CARDS.find((c) => c.id === cardId);
       await this.emit({ type: 'card', player: p, card });
-      await this.log(`${p.name} draws "${card.title}": ${card.text}`);
+      await this.say('l_card', { p: p.name, card: card.id });
       const others = this.alive().filter((o) => o !== p);
       switch (card.id) {
         case 'tailwind': await this.moveTo(p, 0); return this.startBonus(p);
@@ -449,11 +450,11 @@
         case 'gala': return this.hostGala(p);
         case 'quake': {
           const choices = this.tiles.filter((t) => t.type === 'city' && t.owner >= 0 && t.owner !== p.id && t.level > 0 && t.level < 4).map((t) => t.id);
-          if (!choices.length) return this.log('No city is hit.');
+          if (!choices.length) return this.say('l_noQuake');
           const id = await this.ask(p, { type: 'earthquake', choices });
           const t = this.tiles[choices.includes(id) ? id : choices[0]];
           t.level--;
-          await this.log(`An earthquake shakes ${t.name}; it drops to ${D.LEVEL_NAMES[t.level]}.`);
+          await this.say('l_quake', { tile: t.id, lv: t.level });
           return this.emit({ type: 'tile', tile: t });
         }
         case 'charity':
@@ -474,10 +475,10 @@
   // How long clients need to show an event; the online server waits this long between events.
   function eventDuration(e) {
     switch (e.type) {
-      case 'dice': return 800;
+      case 'dice': return 1400;
       case 'move': return e.jump ? 400 : e.path.length * 150 + 250;
       case 'card': return 2000;
-      case 'turn': return 500;
+      case 'turn': return 700;
       case 'tile': return 350;
       case 'bankrupt': return 900;
       case 'money': return 80;

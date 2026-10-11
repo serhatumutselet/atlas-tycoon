@@ -16,32 +16,27 @@
   <!-- Home -->
   <section id="home" class="screen">
     <div class="panel home-panel">
+      <div class="lang" role="group" data-i18n-label="language">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="tr">TR</button>
+      </div>
       <h1 class="logo">Atlas<br>Tycoon</h1>
-      <p class="lede">Buy cities on a floating island, raise landmarks and bankrupt your rivals.</p>
-      <label class="field">Your name
-        <input id="myName" maxlength="14" autocomplete="nickname" placeholder="Captain">
+      <p class="lede" data-i18n="tagline"></p>
+      <label class="field"><span data-i18n="yourName"></span>
+        <input id="myName" maxlength="14" autocomplete="nickname" data-i18n-ph="namePlaceholder">
       </label>
       <div class="stack">
-        <button id="goOnline" class="btn primary big" type="button">Create online room</button>
+        <button id="goOnline" class="btn primary big" type="button" data-i18n="createRoom"></button>
         <form id="joinForm" class="join">
-          <input id="joinCode" maxlength="5" placeholder="Room code" aria-label="Room code" autocapitalize="characters">
-          <button class="btn big" type="submit">Join</button>
+          <input id="joinCode" maxlength="5" data-i18n-ph="roomCode" data-i18n-label="roomCode" autocapitalize="characters">
+          <button class="btn big" type="submit" data-i18n="join"></button>
         </form>
-        <button id="goLocal" class="btn ghost" type="button">Play on this device</button>
+        <button id="goLocal" class="btn ghost" type="button" data-i18n="playLocal"></button>
       </div>
       <p id="homeError" class="error" role="alert"></p>
       <details class="rules">
-        <summary>How to play</summary>
-        <ul>
-          <li>Roll two dice and move. Doubles roll again; three doubles strand you on <b>Castaway Isle</b>.</li>
-          <li>Buy an empty city and build on it right away. First lap: up to a Villa. Second lap: a Tower. After that: a Hotel.</li>
-          <li>Land on your own Hotel to raise a <b>Landmark</b>. Landmarks can never be bought out.</li>
-          <li>Pay rent on a rival's city, then you may <b>buy it out</b> for twice its value.</li>
-          <li>A whole region doubles its rent. The <b>Grand Gala</b> doubles one property's rent again.</li>
-          <li><b>Airship Dock</b>: pay $50 to fly anywhere. Landing exactly on <b>Departure</b> gives a free upgrade.</li>
-          <li>Win with three full regions, every property on one side, all four resorts, or by being the last one standing.</li>
-          <li>Pinch or scroll to zoom the board, drag to move it, double-click to reset. Tap any tile for its details.</li>
-        </ul>
+        <summary data-i18n="howToPlay"></summary>
+        <ul id="rulesList"></ul>
       </details>
     </div>
   </section>
@@ -49,38 +44,38 @@
   <!-- Local setup -->
   <section id="local" class="screen" hidden>
     <div class="panel">
-      <button class="back" type="button" data-go="home">← Back</button>
-      <h2>Play on this device</h2>
-      <p class="lede">Pass the device around, or fill seats with bots.</p>
+      <button class="back" type="button" data-go="home" data-i18n="back"></button>
+      <h2 data-i18n="localTitle"></h2>
+      <p class="lede" data-i18n="localLede"></p>
       <div id="seats" class="seats"></div>
-      <label class="field row">Round limit
-        <select id="maxRounds"><option>20</option><option selected>30</option><option>40</option><option value="999">None</option></select>
+      <label class="field row"><span data-i18n="roundLimit"></span>
+        <select id="maxRounds"><option>20</option><option selected>30</option><option>40</option><option value="999" data-i18n="none"></option></select>
       </label>
-      <button id="startLocal" class="btn primary big" type="button">Start game</button>
+      <button id="startLocal" class="btn primary big" type="button" data-i18n="startGame"></button>
     </div>
   </section>
 
   <!-- Online lobby -->
   <section id="lobby" class="screen" hidden>
     <div class="panel">
-      <button class="back" type="button" id="leaveLobby">← Leave room</button>
-      <p class="eyebrow">Room code</p>
+      <button class="back" type="button" id="leaveLobby" data-i18n="leaveRoom"></button>
+      <p class="eyebrow" data-i18n="roomCodeLabel"></p>
       <div class="code-row">
         <span id="roomCode" class="room-code"></span>
-        <button id="copyLink" class="btn" type="button">Copy invite link</button>
+        <button id="copyLink" class="btn" type="button" data-i18n="copyLink"></button>
       </div>
       <ul id="lobbySeats" class="lobby-seats"></ul>
       <div id="hostControls" class="host">
         <div class="row-btns">
-          <button id="addBot" class="btn" type="button">Add bot</button>
-          <button id="removeBot" class="btn" type="button">Remove bot</button>
+          <button id="addBot" class="btn" type="button" data-i18n="addBot"></button>
+          <button id="removeBot" class="btn" type="button" data-i18n="removeBot"></button>
         </div>
-        <label class="field row">Round limit
-          <select id="roomRounds"><option>20</option><option selected>30</option><option>40</option><option value="999">None</option></select>
+        <label class="field row"><span data-i18n="roundLimit"></span>
+          <select id="roomRounds"><option>20</option><option selected>30</option><option>40</option><option value="999" data-i18n="none"></option></select>
         </label>
-        <button id="startOnline" class="btn primary big" type="button">Start game</button>
+        <button id="startOnline" class="btn primary big" type="button" data-i18n="startGame"></button>
       </div>
-      <p id="guestNote" class="lede" hidden>Waiting for the host to start the game.</p>
+      <p id="guestNote" class="lede" hidden data-i18n="waitHost"></p>
       <p id="lobbyError" class="error" role="alert"></p>
     </div>
   </section>
@@ -92,27 +87,41 @@
       <div id="chips" class="chips"></div>
       <div class="hud-tools">
         <span id="round" class="round"></span>
-        <button id="journalBtn" class="icon-btn" type="button" aria-label="Journal" aria-expanded="false">
+        <button id="journalBtn" class="icon-btn" type="button" data-i18n-label="journal" aria-expanded="false">
           <svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM8 9h8M8 13h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
-        <button id="menuBtn" class="icon-btn" type="button" aria-label="Menu" aria-expanded="false">
+        <button id="menuBtn" class="icon-btn" type="button" data-i18n-label="menu" aria-expanded="false">
           <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
       </div>
     </header>
     <div id="ticker" class="ticker" aria-live="polite"></div>
     <div id="menu" class="menu" hidden>
-      <label class="field row" id="speedRow">Bot speed
-        <select id="speed"><option value="1.5">Slow</option><option value="1" selected>Normal</option><option value="0.45">Fast</option><option value="0.08">Turbo</option></select>
+      <div class="lang" role="group" data-i18n-label="language">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="tr">TR</button>
+      </div>
+      <label class="field row" id="speedRow"><span data-i18n="botSpeed"></span>
+        <select id="speed"><option value="1.5" data-i18n="slow"></option><option value="1" selected data-i18n="normal"></option><option value="0.45" data-i18n="fast"></option><option value="0.08" data-i18n="turbo"></option></select>
       </label>
-      <button id="quitBtn" class="btn" type="button">Leave game</button>
+      <button id="quitBtn" class="btn" type="button" data-i18n="leaveGame"></button>
     </div>
     <aside id="journal" class="journal" hidden>
-      <h3>Journal</h3>
+      <h3 data-i18n="journal"></h3>
       <ol id="log"></ol>
     </aside>
     <div id="info" class="info" hidden></div>
-    <div id="action" class="action" aria-live="polite"></div>
+    <!-- Bottom status strip: whose turn / who we are waiting for / tap-a-tile instructions -->
+    <div id="action" class="action empty" aria-live="polite"></div>
+    <!-- Centre stage: decisions, dice, cards, turn banner -->
+    <div id="stage" class="stage" hidden>
+      <div id="decide" class="decide" role="dialog" aria-modal="false" aria-live="polite"></div>
+    </div>
+    <div id="diceShow" class="dice-show" hidden aria-hidden="true">
+      <div class="dice-pair"><div class="cube"></div><div class="cube"></div></div>
+      <div class="dice-total"></div>
+    </div>
+    <div id="turnBanner" class="turn-banner" hidden></div>
     <div id="cardShow" class="card-show" hidden></div>
   </section>
 
@@ -121,11 +130,12 @@
       <p class="eyebrow" id="overReason"></p>
       <h2 id="overTitle"></h2>
       <ol id="standings" class="standings"></ol>
-      <button id="overBtn" class="btn primary big" type="button">Back to menu</button>
+      <button id="overBtn" class="btn primary big" type="button" data-i18n="backToMenu"></button>
     </div>
   </div>
 
   <script src="js/data.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/engine.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/render.js"></script>

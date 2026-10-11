@@ -98,7 +98,7 @@ async function onEvent(room, evt) {
   const game = room.game;
   const packed = Game.pack(evt);
   if (evt.type === 'log') {
-    room.log.push(evt.text);
+    room.log.push({ key: evt.key, params: evt.params, text: evt.text });
     if (room.log.length > 100) room.log.shift();
   }
   broadcast(room, { kind: 'event', evt: packed, snap: game.snapshot() });
@@ -194,7 +194,7 @@ async function handleApi(req, res, parts, url) {
   }
 
   const room = rooms.get(String(parts[2] || '').toUpperCase());
-  if (!room) return json(res, 404, { error: 'No room with that code. Check the code or create a new room.' });
+  if (!room) return json(res, 404, { code: 'no_room', error: 'No room with that code. Check the code or create a new room.' });
   room.touched = Date.now();
   const action = parts[3];
 
@@ -234,16 +234,16 @@ async function handleApi(req, res, parts, url) {
   switch (action) {
     case 'join': {
       if (seat) return json(res, 200, { code: room.code, token: seat.token, seat: seat.id });
-      if (room.started) return json(res, 409, { error: 'This game has already started.' });
-      if (room.seats.length >= MAX_PLAYERS) return json(res, 409, { error: 'This room is full (4 players).' });
+      if (room.started) return json(res, 409, { code: 'started', error: 'This game has already started.' });
+      if (room.seats.length >= MAX_PLAYERS) return json(res, 409, { code: 'full', error: 'This room is full (4 players).' });
       const s = addSeat(room, cleanName(body.name, 'Player ' + (room.seats.length + 1)), false);
       broadcastLobby(room);
       return json(res, 200, { code: room.code, token: s.token, seat: s.id });
     }
     case 'bot': {
-      if (!seat || seat.id !== 0 || room.started) return json(res, 403, { error: 'Only the host can change seats before the game starts.' });
+      if (!seat || seat.id !== 0 || room.started) return json(res, 403, { code: 'host_only', error: 'Only the host can change seats before the game starts.' });
       if (body.add) {
-        if (room.seats.length >= MAX_PLAYERS) return json(res, 409, { error: 'The room is full.' });
+        if (room.seats.length >= MAX_PLAYERS) return json(res, 409, { code: 'full', error: 'The room is full.' });
         addSeat(room, BOT_NAMES[room.seats.filter((s) => s.isBot).length % BOT_NAMES.length], true);
       } else {
         const idx = room.seats.map((s) => s.isBot).lastIndexOf(true);
@@ -256,22 +256,22 @@ async function handleApi(req, res, parts, url) {
       return json(res, 200, { ok: true });
     }
     case 'settings': {
-      if (!seat || seat.id !== 0 || room.started) return json(res, 403, { error: 'Only the host can change settings.' });
+      if (!seat || seat.id !== 0 || room.started) return json(res, 403, { code: 'host_only', error: 'Only the host can change settings.' });
       const r = Number(body.maxRounds);
       if ([20, 30, 40, 999].includes(r)) room.maxRounds = r;
       broadcastLobby(room);
       return json(res, 200, { ok: true });
     }
     case 'start': {
-      if (!seat || seat.id !== 0) return json(res, 403, { error: 'Only the host can start the game.' });
-      if (room.started) return json(res, 409, { error: 'The game has already started.' });
-      if (room.seats.length < 2) return json(res, 409, { error: 'Add at least one more player or bot.' });
+      if (!seat || seat.id !== 0) return json(res, 403, { code: 'host_only', error: 'Only the host can start the game.' });
+      if (room.started) return json(res, 409, { code: 'started', error: 'The game has already started.' });
+      if (room.seats.length < 2) return json(res, 409, { code: 'need_players', error: 'Add at least one more player or bot.' });
       startGame(room);
       return json(res, 200, { ok: true });
     }
     case 'answer': {
       const p = room.pending;
-      if (!seat || !p || p.reqId !== body.reqId || p.seat !== seat.id) return json(res, 409, { error: 'That choice is no longer open.' });
+      if (!seat || !p || p.reqId !== body.reqId || p.seat !== seat.id) return json(res, 409, { code: 'stale', error: 'That choice is no longer open.' });
       p.resolve(sanitizeAnswer(body.value));
       return json(res, 200, { ok: true });
     }

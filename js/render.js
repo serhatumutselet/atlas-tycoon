@@ -727,6 +727,7 @@
       const c = this.ctx;
       const [sx, sy] = this.P(cx + 0.24, cy + 0.24, z);
       const big = this.TW >= 72;
+      const name = this.nameOf ? this.nameOf(t.id) : t.name;
       const fs = Math.max(8, Math.min(13, this.TW * 0.105));
       if (t.id % 8 === 0) {
         if (big) {
@@ -735,8 +736,8 @@
           c.font = `${Math.round(fs * 1.05)}px ${this.fonts.display}`;
           c.textAlign = 'center';
           c.textBaseline = 'middle';
-          c.strokeText(t.name, sx, sy);
-          this.text(t.name, sx, sy, fs * 1.05, '#2a2f4f', this.fonts.display);
+          c.strokeText(name, sx, sy);
+          this.text(name, sx, sy, fs * 1.05, '#2a2f4f', this.fonts.display);
         }
         return;
       }
@@ -750,8 +751,8 @@
         c.font = `600 ${Math.round(fs)}px ${this.fonts.body}`;
         c.textAlign = 'center';
         c.textBaseline = 'middle';
-        c.strokeText(t.name, sx, sy - fs * 0.6);
-        this.text(t.name, sx, sy - fs * 0.6, fs, '#232845', this.fonts.body, 600);
+        c.strokeText(name, sx, sy - fs * 0.6);
+        this.text(name, sx, sy - fs * 0.6, fs, '#232845', this.fonts.body, 600);
       }
       if (value != null) {
         const label = '$' + value.toLocaleString('en-US');
