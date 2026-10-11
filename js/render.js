@@ -1,5 +1,5 @@
 // Atlas Tycoon - isometric canvas renderer. Draws a floating-island board from a Game
-// (or a snapshot-loaded Game) and animates pawns, dice and buildings.
+// (or a snapshot-loaded Game) and animates pawns, buildings and the camera.
 (function () {
   const D = window.ATData;
   const TILE_Z = 0.18;
@@ -54,7 +54,6 @@
       this.flashId = -1;
       this.active = -1;
       this.floats = [];
-      this.dice = { v: [5, 2], t0: -1e9, dur: 700, shown: [5, 2] };
       this.clouds = Array.from({ length: 6 }, (_, i) => ({ x: (i * 0.23) % 1, y: 0.06 + ((i * 37) % 70) / 100, s: 0.6 + (i % 3) * 0.35, v: 0.004 + (i % 4) * 0.002 }));
       this.fonts = { display: '"Lilita One", "Arial Rounded MT Bold", sans-serif', body: '"Outfit", system-ui, sans-serif' };
       this.cam = { z: 1, x: 0, y: 0 };
@@ -118,15 +117,6 @@
 
     hideToken(pid) { if (this.tokens[pid]) this.tokens[pid].alpha = 0; }
 
-    rollDice(values) {
-      this.dice.v = values;
-      if (this.skipping) return Promise.resolve();
-      this.dice.t0 = performance.now();
-      return new Promise((r) => setTimeout(r, this.dice.dur));
-    }
-
-    setDice(values) { this.dice.v = values; this.dice.shown = values; }
-
     markGrow(tileId) { this.grow[tileId] = performance.now(); }
 
     setPickable(ids) { this.pick = ids ? new Set(ids) : null; }
@@ -177,8 +167,10 @@
       this.dpr = Math.min(2, window.devicePixelRatio || 1);
       this.canvas.width = Math.round(this.W * this.dpr);
       this.canvas.height = Math.round(this.H * this.dpr);
-      const padTop = Number(this.canvas.dataset.padTop || 0);
-      const padBottom = Number(this.canvas.dataset.padBottom || 0);
+      // Phones stack the tool bar and two player cards on top, two cards at the bottom.
+      const narrow = this.W < 640;
+      const padTop = narrow ? 112 : Number(this.canvas.dataset.padTop || 0);
+      const padBottom = narrow ? 64 : Number(this.canvas.dataset.padBottom || 0);
       const avail = this.H - padTop - padBottom;
       // Board extents in tile widths: 9.8 across, about 6.9 tall including sky-high landmarks and rock.
       // Board extents in tile widths: 9.8 across, about 6.9 tall including sky-high landmarks and rock.
@@ -406,14 +398,14 @@
       this.now = now;
       this.drawClouds(now);
       if (!this.game) return;
-      this.drawIsland(now);
+      this.drawIslets(now);
       const objects = [];
+      this.drawIsland(now, objects);
       for (const t of this.game.tiles) this.drawTile(t, objects);
       this.game.players.forEach((p, i) => {
         const tk = this.tokens[i];
         if (tk && tk.alpha > 0) objects.push({ d: tk.x + tk.y + 0.05, f: () => this.drawPawn(p, tk, i) });
       });
-      objects.push({ d: 9.2, f: () => this.drawDice(now) });
       objects.sort((a, b) => a.d - b.d).forEach((o) => o.f());
       this.drawFloats(now);
     }
@@ -435,8 +427,87 @@
       c.restore();
     }
 
-    drawIsland(now) {
+    // Small floating islets drifting in the sky around the board.
+    drawIslets(now) {
+      const spots = [[-2.7, 5.2, 0.55, 0], [5.3, -2.6, 0.45, 1.7], [-1.6, 9.6, 0.32, 3.1]];
+      for (const [x, y, r, ph] of spots) {
+        const bob = Math.sin(now / 1400 + ph) * 0.12;
+        const z0 = -0.3 + bob;
+        const P = this.P.bind(this);
+        this.poly([P(x - r, y + r, z0 - 0.18), P(x + r, y + r, z0 - 0.18), P(x + r * 0.2, y + r * 0.2, z0 - 1.1 * r - 0.4)], '#7a5640');
+        this.poly([P(x + r, y + r, z0 - 0.18), P(x + r, y - r, z0 - 0.18), P(x + r * 0.2, y + r * 0.2, z0 - 1.1 * r - 0.4)], '#5e4031');
+        this.box(x - r, y - r, x + r, y + r, z0 - 0.18, z0, '#9ad67f', '#b07c52', '#8e603e');
+        if (r > 0.4) this.drawPalm(x - 0.05, y - 0.05, z0, 0.65);
+        else this.drawTree(x, y, z0, 0.13, 0);
+      }
+    }
+
+    drawTree(x, y, z, r, kind) {
+      const c = this.ctx;
+      const [sx, sy] = this.P(x, y, z);
+      const R = r * this.TW;
+      c.fillStyle = 'rgba(30,60,30,0.22)';
+      c.beginPath(); c.ellipse(sx + R * 0.3, sy, R * 1.1, R * 0.45, 0, 0, Math.PI * 2); c.fill();
+      if (kind === 1) {
+        // Pine: stacked cones.
+        c.fillStyle = '#7a5236';
+        c.fillRect(sx - R * 0.12, sy - R * 0.5, R * 0.24, R * 0.5);
+        [['#2f8a4a', 0], ['#3aa058', 0.55], ['#4cb766', 1.05]].forEach(([col, k]) => {
+          const base = sy - R * (0.4 + k), w = R * (1 - k * 0.32);
+          c.fillStyle = col;
+          c.beginPath(); c.moveTo(sx - w, base); c.lineTo(sx + w, base); c.lineTo(sx, base - R * 1.1); c.closePath(); c.fill();
+        });
+        return;
+      }
+      c.strokeStyle = '#7a5236';
+      c.lineWidth = Math.max(1.5, R * 0.25);
+      c.lineCap = 'round';
+      c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx, sy - R * 0.9); c.stroke();
+      c.fillStyle = '#3f9a4f';
+      c.beginPath(); c.arc(sx, sy - R * 1.35, R * 0.85, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#56b862';
+      c.beginPath(); c.arc(sx - R * 0.25, sy - R * 1.6, R * 0.6, 0, Math.PI * 2); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.25)';
+      c.beginPath(); c.arc(sx - R * 0.4, sy - R * 1.8, R * 0.25, 0, Math.PI * 2); c.fill();
+    }
+
+    drawFlowers(x, y, z, seed) {
+      const c = this.ctx;
+      const cols = ['#ff7aa2', '#ffd54a', '#ffffff', '#b38cff'];
+      const [sx, sy] = this.P(x, y, z);
+      c.fillStyle = '#6cc35a';
+      c.beginPath(); c.ellipse(sx, sy, this.TW * 0.2, this.TW * 0.09, 0, 0, Math.PI * 2); c.fill();
+      for (let i = 0; i < 9; i++) {
+        const a = seed * 3.1 + i * 2.39, d = ((i * 37 + seed * 11) % 10) / 10;
+        c.fillStyle = cols[(i + seed) % cols.length];
+        c.beginPath();
+        c.arc(sx + Math.cos(a) * this.TW * 0.16 * d, sy + Math.sin(a) * this.TW * 0.07 * d - 1, Math.max(1.2, this.TW * 0.018), 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+
+    drawFountain(x, y, now) {
+      const c = this.ctx;
+      const [bx, by] = this.P(x, y, 0.02);
+      c.fillStyle = '#e9eef6';
+      c.beginPath(); c.ellipse(bx, by, this.TW * 0.14, this.TW * 0.06, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#9fe2f2';
+      c.beginPath(); c.ellipse(bx, by - 1, this.TW * 0.1, this.TW * 0.04, 0, 0, Math.PI * 2); c.fill();
+      for (let i = 0; i < 14; i++) {
+        const ph = ((now / 1100) + i / 14) % 1;
+        const ang = i * 2.4;
+        const h = Math.sin(Math.PI * ph) * this.ZS * 0.55;
+        const spread = ph * this.TW * 0.11;
+        c.fillStyle = `rgba(230,250,255,${0.9 - ph * 0.6})`;
+        c.beginPath();
+        c.arc(bx + Math.cos(ang) * spread, by - h + Math.sin(ang) * spread * 0.4, Math.max(1, this.TW * 0.012), 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+
+    drawIsland(now, objects) {
       const P = this.P.bind(this);
+      const c = this.ctx;
       const a = -0.45, b = 9.45, zt = -0.02, zb = -0.6;
       // Hanging rock under the two visible edges.
       const left = [P(a, b, zb)], right = [P(b, b, zb)];
@@ -452,16 +523,57 @@
       right.push(P(b, a, zb));
       this.poly(left, '#7a5640');
       this.poly(right, '#5e4031');
-      // Soil and grass slab.
+      // Soil slab with darker strata and a grass lip.
       this.box(a, a, b, b, zb, zt, '#94d27a', '#b07c52', '#8e603e');
-      this.poly([P(a, b, zt), P(b, b, zt), P(b, b, zt - 0.1), P(a, b, zt - 0.1)], '#6fae58');
-      this.poly([P(b, a, zt), P(b, b, zt), P(b, b, zt - 0.1), P(b, a, zt - 0.1)], '#5d9a49');
+      [-0.28, -0.44].forEach((zz, i) => {
+        this.poly([P(a, b, zz), P(b, b, zz), P(b, b, zz - 0.04), P(a, b, zz - 0.04)], i ? '#9a6a45' : '#a57250');
+        this.poly([P(b, a, zz), P(b, b, zz), P(b, b, zz - 0.04), P(b, a, zz - 0.04)], i ? '#7c5236' : '#86593b');
+      });
+      this.poly([P(a, b, zt), P(b, b, zt), P(b, b, zt - 0.12), P(a, b, zt - 0.12)], '#6fae58');
+      this.poly([P(b, a, zt), P(b, b, zt), P(b, b, zt - 0.12), P(b, a, zt - 0.12)], '#5d9a49');
+      // Grass tufts hanging over the lip.
+      for (let i = 0; i < 24; i++) {
+        const t = (i + 0.5) / 24;
+        const [lx, ly] = P(a + (b - a) * t, b, zt - 0.12);
+        const [rx, ry] = P(b, b - (b - a) * t, zt - 0.12);
+        const h = this.TW * (0.05 + ((i * 7) % 5) * 0.012);
+        c.fillStyle = '#6fae58';
+        c.beginPath(); c.moveTo(lx - h * 0.6, ly - 1); c.lineTo(lx, ly + h); c.lineTo(lx + h * 0.6, ly - 1); c.fill();
+        c.fillStyle = '#5d9a49';
+        c.beginPath(); c.moveTo(rx - h * 0.6, ry - 1); c.lineTo(rx, ry + h); c.lineTo(rx + h * 0.6, ry - 1); c.fill();
+      }
+      // Waterfall spilling from the left cliff.
+      const wx0 = 2.4, wx1 = 3.0, wTop = zt - 0.1, wBot = zb - 2.6;
+      const grad = c.createLinearGradient(0, P(wx0, b, wTop)[1], 0, P(wx0, b, wBot)[1]);
+      grad.addColorStop(0, 'rgba(150,225,250,0.95)');
+      grad.addColorStop(0.7, 'rgba(150,225,250,0.55)');
+      grad.addColorStop(1, 'rgba(150,225,250,0)');
+      this.poly([P(wx0, b, wTop), P(wx1, b, wTop), P(wx1 + 0.08, b, wBot), P(wx0 - 0.08, b, wBot)], grad);
+      c.strokeStyle = 'rgba(255,255,255,0.7)';
+      c.lineWidth = Math.max(1, this.TW * 0.012);
+      for (let k = 0; k < 6; k++) {
+        const u = wx0 + 0.06 + k * 0.1;
+        const ph = ((now / 700) + k * 0.37) % 1;
+        const za = wTop - ph * (wTop - wBot) * 0.8, zb2 = za - 0.35;
+        const [x1, y1] = P(u, b, za), [x2, y2] = P(u, b, zb2);
+        c.globalAlpha = 1 - ph;
+        c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      }
+      c.globalAlpha = 1;
+      const [mx, my] = P((wx0 + wx1) / 2, b, wTop);
+      c.fillStyle = 'rgba(255,255,255,0.5)';
+      c.beginPath(); c.ellipse(mx, my, this.TW * 0.2, this.TW * 0.05, 0, 0, Math.PI * 2); c.fill();
 
-      // Centre park: pond, paths, trees and the painted title.
-      const c = this.ctx;
-      this.poly([P(1.15, 1.15, 0), P(7.85, 1.15, 0), P(7.85, 7.85, 0), P(1.15, 7.85, 0)], '#a5dc89');
-      this.ellipse(6.6, 6.5, 0, 0.9, '#5cc0d9');
-      this.ellipse(6.55, 6.45, 0, 0.7, '#7fd3e6');
+      // Centre park: lawn with a hedge border, painted title, pond with a fountain.
+      this.poly([P(1.1, 1.1, 0), P(7.9, 1.1, 0), P(7.9, 7.9, 0), P(1.1, 7.9, 0)], '#86c96d');
+      this.poly([P(1.22, 1.22, 0), P(7.78, 1.22, 0), P(7.78, 7.78, 0), P(1.22, 7.78, 0)], '#a5dc89');
+      // Mown stripes.
+      for (let i = 0; i < 6; i++) {
+        const u = 1.22 + i * 1.1;
+        this.poly([P(u, 1.22, 0), P(u + 0.55, 1.22, 0), P(u + 0.55, 7.78, 0), P(u, 7.78, 0)], 'rgba(255,255,255,0.07)');
+      }
+      // Sand path from Departure's corner to the pond.
+      this.poly([P(7.78, 7.5, 0), P(7.78, 7.78, 0), P(7.5, 7.78, 0), P(6.9, 7.1, 0), P(7.1, 6.9, 0)], '#f1dfae');
       c.save();
       const s = this.TW / 200;
       c.setTransform(this.dpr * s, this.dpr * s * 0.5, -this.dpr * s, this.dpr * s * 0.5, this.dpr * this.ox, this.dpr * this.oy);
@@ -469,13 +581,31 @@
       c.font = `92px ${this.fonts.display}`;
       c.textAlign = 'center';
       c.textBaseline = 'middle';
-      c.fillStyle = 'rgba(40,70,40,0.18)';
-      c.fillText('ATLAS', 455, 300);
-      c.fillText('TYCOON', 455, 400);
+      c.lineJoin = 'round';
+      c.lineWidth = 14;
+      c.strokeStyle = 'rgba(46,92,46,0.35)';
+      c.strokeText('ATLAS', 456, 301);
+      c.strokeText('TYCOON', 456, 401);
       c.fillStyle = '#fff6df';
       c.fillText('ATLAS', 450, 295);
       c.fillText('TYCOON', 450, 395);
       c.restore();
+      this.ellipse(6.45, 6.35, 0, 1.0, '#e9dbb0');
+      this.ellipse(6.45, 6.35, 0, 0.9, '#4fb6d3');
+      this.ellipse(6.4, 6.3, 0, 0.72, '#7fd3e6');
+      [[6.0, 6.7], [6.9, 5.95], [6.2, 5.95]].forEach(([x, y]) => this.ellipse(x, y, 0.01, 0.07, '#5aa858'));
+      const ripple = (now / 2200) % 1;
+      const [rx, ry] = P(6.4, 6.3, 0.01);
+      c.strokeStyle = `rgba(255,255,255,${0.5 * (1 - ripple)})`;
+      c.lineWidth = 1.2;
+      c.beginPath(); c.ellipse(rx, ry, this.TW * 0.6 * ripple, this.TW * 0.3 * ripple, 0, 0, Math.PI * 2); c.stroke();
+
+      // Trees, flowers and the fountain join the depth-sorted pass.
+      const trees = [[1.9, 5.3, 0], [2.5, 6.2, 1], [1.8, 6.9, 0], [3.0, 7.25, 0], [2.25, 7.45, 1], [6.9, 1.8, 1], [7.35, 2.5, 0],
+        [5.9, 1.65, 0], [7.4, 3.4, 1], [4.4, 7.2, 0], [7.25, 4.75, 0], [1.75, 1.9, 1], [3.8, 6.55, 1]];
+      trees.forEach(([x, y, k]) => objects.push({ d: x + y, f: () => this.drawTree(x, y, 0, 0.15, k) }));
+      [[3.4, 5.4, 1], [5.2, 5.0, 2], [2.2, 2.6, 3], [5.0, 7.0, 4]].forEach(([x, y, sd]) => objects.push({ d: x + y - 0.3, f: () => this.drawFlowers(x, y, 0, sd) }));
+      objects.push({ d: 12.7, f: () => this.drawFountain(6.4, 6.3, now) });
     }
 
     drawTile(t, objects) {
@@ -497,6 +627,13 @@
       this.box(x0, y0, x1, y1, 0, TILE_Z + lift, top, sideL, sideR, 'rgba(60,40,20,0.25)');
       const z = TILE_Z + lift;
       const P = this.P.bind(this);
+      // Bevel: light catches the back edges, the front edges sit in shade.
+      const c = this.ctx;
+      c.lineWidth = Math.max(1, this.TW * 0.014);
+      c.strokeStyle = 'rgba(255,255,255,0.75)';
+      c.beginPath(); c.moveTo(...P(x0, y1, z)); c.lineTo(...P(x0, y0, z)); c.lineTo(...P(x1, y0, z)); c.stroke();
+      c.strokeStyle = 'rgba(80,60,30,0.18)';
+      c.beginPath(); c.moveTo(...P(x1, y0, z)); c.lineTo(...P(x1, y1, z)); c.lineTo(...P(x0, y1, z)); c.stroke();
       if (t.type === 'city') {
         const col = D.GROUPS[t.group].color;
         const w = 0.2;
@@ -902,38 +1039,6 @@
         c.fill();
       }
       c.restore();
-    }
-
-    drawDice(now) {
-      const dz = this.dice;
-      const k = (now - dz.t0) / dz.dur;
-      const rolling = k >= 0 && k < 1;
-      if (rolling && Math.floor(now / 70) !== dz.tick) {
-        dz.tick = Math.floor(now / 70);
-        dz.shown = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
-      }
-      if (!rolling) dz.shown = dz.v;
-      const spots = [[4.05, 5.75], [5.1, 5.45]];
-      spots.forEach(([x, y], i) => {
-        const hop = rolling ? Math.abs(Math.sin(k * Math.PI * 3 + i)) * (1 - k) * 1.2 : 0;
-        const jx = rolling ? Math.sin(now / 37 + i) * 0.06 : 0;
-        this.drawDie(x + jx, y - jx, hop, dz.shown[i]);
-      });
-    }
-
-    drawDie(x, y, z, n) {
-      const r = 0.3;
-      this.ellipse(x, y, 0, 0.35 * (1 / (1 + z)), 'rgba(0,0,0,0.15)');
-      this.box(x - r, y - r, x + r, y + r, z, z + r * 1.1, '#ffffff', '#ece8f4', '#d3cde3', 'rgba(60,50,90,0.25)');
-      const pips = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] }[n] || [];
-      const c = this.ctx;
-      for (const [u, v] of pips) {
-        const [sx, sy] = this.P(x + u * r * 0.5, y + v * r * 0.5, z + r * 1.1);
-        c.beginPath();
-        c.ellipse(sx, sy, this.TW * 0.035, this.TW * 0.018, 0, 0, Math.PI * 2);
-        c.fillStyle = n === 1 ? '#e8553d' : '#232845';
-        c.fill();
-      }
     }
 
     text(str, x, y, size, color, font, weight) {

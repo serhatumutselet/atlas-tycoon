@@ -2,7 +2,7 @@
 
 A board game about buying cities, raising landmarks and chasing a monopoly on a floating isometric island. Play on one device, or online with up to four friends. No build step, no dependencies.
 
-![Atlas Tycoon board mid-game](docs/screenshot.jpg)
+![Atlas Tycoon board mid-game](docs/screenshot.png)
 
 ## Features
 

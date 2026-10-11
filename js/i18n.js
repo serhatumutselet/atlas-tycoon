@@ -38,7 +38,7 @@
     err_full: 'This room is full (4 players).', err_host_only: 'Only the host can do that.', err_need_players: 'Add at least one more player or bot.',
     err_stale: 'That choice is no longer open.',
     // hud
-    camFollow: 'Camera follows the pawn',
+    camFollow: 'Camera follows the pawn', turnTag: 'Turn',
     round: 'Round {n}', roundOf: 'Round {n} / {max}', journal: 'Journal', menu: 'Menu', botSpeed: 'Bot speed',
     slow: 'Slow', normal: 'Normal', fast: 'Fast', turbo: 'Turbo', leaveGame: 'Leave game', confirmLeave: 'Leave this game?',
     turnOf: "{p}'s turn", yourTurn: 'Your turn!', badgeIsle: 'Isle', badgeShield: 'Shield', badgeCoupon: '½ rent',
@@ -109,7 +109,7 @@
     err_no_room: 'Bu kodla bir oda yok. Kodu kontrol et ya da yeni oda kur.', err_started: 'Bu oyun çoktan başladı.',
     err_full: 'Oda dolu (4 oyuncu).', err_host_only: 'Bunu sadece host yapabilir.', err_need_players: 'En az bir oyuncu ya da bot daha ekle.',
     err_stale: 'Bu seçim artık geçerli değil.',
-    camFollow: 'Kamera piyonu takip etsin',
+    camFollow: 'Kamera piyonu takip etsin', turnTag: 'Sıra',
     round: 'Tur {n}', roundOf: 'Tur {n} / {max}', journal: 'Günlük', menu: 'Menü', botSpeed: 'Bot hızı',
     slow: 'Yavaş', normal: 'Normal', fast: 'Hızlı', turbo: 'Turbo', leaveGame: 'Oyundan çık', confirmLeave: 'Oyundan çıkılsın mı?',
     turnOf: 'Sıra: {p}', yourTurn: 'Sıra sende!', badgeIsle: 'Ada', badgeShield: 'Kalkan', badgeCoupon: '½ kira',

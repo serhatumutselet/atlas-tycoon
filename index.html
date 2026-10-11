@@ -82,9 +82,10 @@
 
   <!-- Game -->
   <section id="game" class="game" hidden>
-    <canvas id="board" data-pad-top="64" data-pad-bottom="56" aria-label="Game board"></canvas>
+    <canvas id="board" data-pad-top="70" data-pad-bottom="70" aria-label="Game board"></canvas>
+    <!-- One player card per screen corner -->
+    <div id="chips" class="chips"></div>
     <header class="hud-top">
-      <div id="chips" class="chips"></div>
       <div class="hud-tools">
         <span id="round" class="round"></span>
         <button id="camBtn" class="icon-btn" type="button" data-i18n-label="camFollow" aria-pressed="true">
@@ -129,7 +130,9 @@
   </section>
 
   <div id="over" class="overlay" hidden>
+    <div id="confetti" class="confetti" aria-hidden="true"></div>
     <div class="panel over-panel">
+      <svg class="trophy" viewBox="0 0 64 64" aria-hidden="true"><path d="M18 8h28v14a14 14 0 0 1-28 0z" fill="#ffc53d" stroke="#2b1d00" stroke-width="3" stroke-linejoin="round"/><path d="M18 12H9v4a9 9 0 0 0 9 9M46 12h9v4a9 9 0 0 1-9 9" fill="none" stroke="#2b1d00" stroke-width="3"/><path d="M28 36h8v10h-8z" fill="#ffc53d" stroke="#2b1d00" stroke-width="3"/><rect x="20" y="46" width="24" height="8" rx="2" fill="#d99a00" stroke="#2b1d00" stroke-width="3"/><path d="M24 14l2 8" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".7"/></svg>
       <p class="eyebrow" id="overReason"></p>
       <h2 id="overTitle"></h2>
       <ol id="standings" class="standings"></ol>

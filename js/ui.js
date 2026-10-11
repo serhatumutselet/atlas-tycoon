@@ -38,6 +38,8 @@
   const speed = () => (session && session.kind === 'local' ? Number($('#speed').value) || 1 : 1);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms * speed()));
   const nameTag = (p) => `<b class="who" style="--pc:${p.color}">${esc(p.name)}</b>`;
+  const PAWN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6.4" r="3.7"/><path d="M8.5 10.7h7l-1.3 2.2c1.7 2 2.7 4.3 2.9 6.6H6.9c.2-2.3 1.2-4.6 2.9-6.6z"/><rect x="5" y="19.6" width="14" height="3.2" rx="1.6"/></svg>';
+  const avatar = (p) => `<span class="avatar" style="--pc:${p.color}">${PAWN_SVG}</span>`;
   const isMine = (p) => session && (session.kind === 'online' ? p.id === session.seat : !p.isBot);
 
   // ---------- language ----------
@@ -398,12 +400,12 @@
   const faceHtml = (n) => `<div class="face f${n}">${Array.from({ length: 9 }, (_, i) => `<i${PIPS[n].includes(i) ? ' class="on"' : ''}></i>`).join('')}</div>`;
   const cubeState = [{ x: -20, y: 20 }, { x: -20, y: -20 }];
   $$('#diceShow .cube').forEach((c, i) => {
-    c.innerHTML = [1, 2, 3, 4, 5, 6].map(faceHtml).join('');
+    // A solid core sits just inside the rounded faces so no gaps show while the die tumbles.
+    c.innerHTML = [1, 2, 3, 4, 5, 6].map((n) => `<div class="core f${n}"></div>`).join('') + [1, 2, 3, 4, 5, 6].map(faceHtml).join('');
     c.style.transform = `rotateX(${cubeState[i].x}deg) rotateY(${cubeState[i].y}deg)`;
   });
 
   async function rollDice(dice) {
-    board.setDice(dice);
     if (board.skipping || speed() < 0.3) return;
     const box = $('#diceShow');
     const cubes = box.querySelectorAll('.cube');
@@ -430,11 +432,31 @@
     box.hidden = true;
   }
 
+  const CARD_ICONS = {
+    tailwind: '<path d="M4 12h13M12 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    boom: '<ellipse cx="12" cy="17" rx="7" ry="3" fill="currentColor"/><ellipse cx="12" cy="12.5" rx="7" ry="3" fill="currentColor" opacity=".8"/><ellipse cx="12" cy="8" rx="7" ry="3" fill="currentColor" opacity=".6"/>',
+    inherit: '<rect x="4" y="10" width="16" height="10" rx="1.5" fill="currentColor"/><rect x="3" y="7" width="18" height="4" rx="1" fill="currentColor" opacity=".75"/><path d="M12 7v13" stroke="#fff" stroke-width="1.8"/>',
+    badinvest: '<path d="M3 6l6 6 4-4 8 9M15 17h6v-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    storm: '<path d="M7 15a5 5 0 1 1 1-9.9A6 6 0 0 1 19 9a4 4 0 0 1-1 6z" fill="currentColor"/><path d="M12 13l-2 5h3l-2 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+    voucher: '<ellipse cx="12" cy="10" rx="9" ry="4.5" fill="currentColor"/><path d="M8 15l1 4h6l1-4" fill="currentColor" opacity=".7"/>',
+    shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" fill="currentColor"/><path d="M8.5 12l2.5 2.5L16 9.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>',
+    coupon: '<path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z" fill="currentColor"/><path d="M9 15l6-6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>',
+    gala: '<path d="M12 2.5l2.8 6 6.5.7-4.9 4.4 1.4 6.4L12 16.8 6.2 20l1.4-6.4L2.7 9.2l6.5-.7z" fill="currentColor"/>',
+    quake: '<path d="M2 18h20M5 18l3-6 3 3 3-8 3 6 2-3 2 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>',
+    charity: '<path d="M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z" fill="currentColor"/>',
+    birthday: '<rect x="4" y="11" width="16" height="9" rx="2" fill="currentColor"/><path d="M8 11V8M12 11V7M16 11V8" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="6" r="1.3" fill="currentColor"/><circle cx="12" cy="5" r="1.3" fill="currentColor"/><circle cx="16" cy="6" r="1.3" fill="currentColor"/>',
+    repairs: '<path d="M14.5 3.5a5 5 0 0 0-5.6 6.6L3.5 15.5l5 5 5.4-5.4a5 5 0 0 0 6.6-5.6l-3 3-3.4-1-1-3.4z" fill="currentColor"/>',
+    taxi: '<path d="M20 12H7M12 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  };
+
   async function showCard(card) {
     if (board.skipping) return;
     const [title, text] = I.card(card.id);
     const box = $('#cardShow');
-    box.innerHTML = `<div class="fortune"><span class="eyebrow">${t('fortune')}</span><h3>${esc(title)}</h3><p>${esc(text)}</p></div>`;
+    const bad = ['badinvest', 'storm', 'charity', 'repairs', 'taxi'].includes(card.id);
+    box.innerHTML = `<div class="fortune${bad ? ' bad' : ''}"><div class="rays"></div><span class="eyebrow">${t('fortune')}</span>
+      <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${CARD_ICONS[card.id] || CARD_ICONS.gala}</svg></span>
+      <h3>${esc(title)}</h3><p>${esc(text)}</p></div>`;
     box.hidden = false;
     await (session.kind === 'local' ? wait(1600) : new Promise((r) => setTimeout(r, 1800)));
     box.hidden = true;
@@ -452,6 +474,14 @@
       li.innerHTML = `<span class="pawn-dot"></span><b>${esc(p.name)}</b><span>${p.bankrupt ? t('bankrupt') : fmt(view.netWorth(p))}</span>`;
       list.appendChild(li);
     });
+    const conf = $('#confetti');
+    conf.innerHTML = '';
+    const colors = ['#ffc53d', '#ff6b5a', '#4fb6d3', '#2eae6b', '#b38cff', winner.color];
+    for (let i = 0; i < 70; i++) {
+      const piece = el('i');
+      piece.style.cssText = `left:${Math.random() * 100}%;background:${colors[i % colors.length]};animation-delay:${(Math.random() * 1.2).toFixed(2)}s;animation-duration:${(2.4 + Math.random() * 1.8).toFixed(2)}s;--spin:${Math.round(360 + Math.random() * 720)}deg;--drift:${Math.round(Math.random() * 120 - 60)}px`;
+      conf.appendChild(piece);
+    }
     $('#over').hidden = false;
   }
   $('#overBtn').addEventListener('click', leaveSession);
@@ -464,14 +494,16 @@
     const current = view.players[view.turn];
     view.players.forEach((p, i) => {
       const me = session && session.kind === 'online' && p.id === session.seat;
-      const chip = el('div', `chip${p === current && !view.winner ? ' active' : ''}${p.bankrupt ? ' out' : ''}`);
+      const chip = el('div', `chip c${i}${p === current && !view.winner ? ' active' : ''}${p.bankrupt ? ' out' : ''}`);
       chip.style.setProperty('--pc', p.color);
       const badges = [p.islandTurns ? t('badgeIsle') : '', p.shield ? t('badgeShield') : '', p.coupon ? t('badgeCoupon') : ''].filter(Boolean);
       const props = view.owned(p).length;
-      chip.innerHTML = `<span class="pawn-dot"></span>
+      chip.innerHTML = `${avatar(p)}
         <span class="chip-text"><span class="chip-name">${esc(p.name)}${me ? ` <i>${t('you')}</i>` : ''}${p.isBot ? ` <i>${t('bot').toLowerCase()}</i>` : ''}</span>
         <span class="chip-cash">${p.bankrupt ? t('bankrupt') : fmt(p.cash)}</span>
-        <span class="chip-meta">${t('props', { n: props })} · ${t('lap', { n: p.laps + 1 })}</span></span>${badges.map((b) => `<span class="badge">${b}</span>`).join('')}`;
+        <span class="chip-meta">${t('props', { n: props })} · ${t('lap', { n: p.laps + 1 })}</span>
+        ${badges.length ? `<span class="badges">${badges.map((b) => `<span class="badge">${b}</span>`).join('')}</span>` : ''}</span>
+        ${p === current && !view.winner ? `<span class="turn-tag">${t('turnTag')}</span>` : ''}`;
       chip.title = t('worth', { m: view.netWorth(p) });
       const delta = p.cash - (lastCash[i] != null ? lastCash[i] : p.cash);
       if (delta) chipDeltas[i] = { v: delta, at: performance.now() };
@@ -487,7 +519,7 @@
       }
       box.appendChild(chip);
     });
-    $('#round').textContent = view.rules.maxRounds < 999 ? t('roundOf', { n: view.round, max: view.rules.maxRounds }) : t('round', { n: view.round });
+    $('#round').textContent = view.rules.maxRounds < 999 ? t('roundOf', { n: Math.min(view.round, view.rules.maxRounds), max: view.rules.maxRounds }) : t('round', { n: view.round });
   }
 
   function onHover(id) {
@@ -528,7 +560,7 @@
       body = `<p class="muted">${t('info_' + x.type, params)}</p>`;
     }
     const box = $('#info');
-    box.innerHTML = `<h3 style="--gc:${x.type === 'city' ? D.GROUPS[x.group].color : '#8aa0c8'}">${esc(I.tileName(id))}</h3>
+    box.innerHTML = `<header class="deed mini" style="--gc:${x.type === 'city' ? D.GROUPS[x.group].color : x.type === 'resort' ? '#3fb0c9' : '#8a9bc4'}"><h3>${esc(I.tileName(id))}</h3></header>
       ${owner ? `<p class="own"><span class="pawn-dot" style="--pc:${owner.color}"></span>${esc(owner.name)} · ${t('rentNow', { m: view.rent(x) })}${view.festival === x.id ? ' · ' + t('gala') : ''}</p>` : ''}${body}`;
     box.classList.toggle('pinned', pinned);
     const [sx, sy] = board.tileScreenPos(id);
@@ -618,6 +650,7 @@
       switch (req.type) {
         case 'roll':
           html = `<div class="roll-card" style="--pc:${p.color}">
+            ${avatar(p)}
             <div class="mini-dice" aria-hidden="true"><span>${faceHtml(5)}</span><span>${faceHtml(3)}</span></div>
             <small>${t('rollTitle')}</small><h2>${t('rollSub', { p: nameTag(p) })}</h2></div>`;
           buttons = [{ label: t('rollDice'), value: true, primary: true, big: true }];
@@ -689,6 +722,7 @@
         return;
       }
       setStatus('');
+      $('#decide').style.setProperty('--pc', p.color);
       setDecide(`<div class="ask">${html}</div><div class="opts"></div><div class="btns"></div>${timerBar(deadline)}`);
       makeButtons($('#decide .opts'), buttons.filter((b) => b.option));
       makeButtons($('#decide .btns'), buttons.filter((b) => !b.option));
