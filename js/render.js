@@ -710,9 +710,15 @@
           this.drawStar(cx - 0.1, cy - 0.1, z + 1.25 + Math.sin(now / 300) * 0.04, 0.18);
           return;
         case 'worldTour': {
-          const bob = Math.sin(now / 700) * 0.08;
-          this.ellipse(cx, cy, z, 0.3, 'rgba(0,0,0,0.12)');
-          this.drawBlimp(cx - 0.05, cy - 0.05, z + 0.85 + bob);
+          const bob = Math.sin(now / 900) * 0.05;
+          const [mx, my] = this.drawMast(cx + 0.12, cy - 0.12, z, 0.85);
+          const L = this.TW * 0.62;
+          const bx = mx - L * 0.53, by = my + this.TW * 0.04 + bob * this.ZS;
+          // Shadow of the airship on the dock.
+          const [gx, gy] = this.P(cx - 0.25, cy + 0.15, z);
+          this.ctx.fillStyle = 'rgba(30,30,60,0.14)';
+          this.ctx.beginPath(); this.ctx.ellipse(gx, gy, L * 0.42, L * 0.12, 0, 0, Math.PI * 2); this.ctx.fill();
+          this.drawBlimp(bx, by);
           return;
         }
       }
@@ -931,22 +937,105 @@
       c.fill();
     }
 
-    drawBlimp(x, y, z) {
+    // Mooring mast: a red-and-white lattice tower with a blinking beacon.
+    drawMast(x, y, z, h) {
       const c = this.ctx;
-      const [sx, sy] = this.P(x, y, z);
-      const w = this.TW * 0.42, h = this.TW * 0.16;
-      c.fillStyle = '#8fb8f0';
-      c.beginPath(); c.moveTo(sx + w * 0.5, sy); c.lineTo(sx + w * 0.75, sy - h * 0.7); c.lineTo(sx + w * 0.75, sy + h * 0.7); c.fill();
-      const grad = c.createLinearGradient(sx, sy - h, sx, sy + h);
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(1, '#9cc0f2');
-      c.fillStyle = grad;
-      c.beginPath(); c.ellipse(sx, sy, w * 0.55, h, 0, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = 'rgba(40,70,140,0.35)';
-      c.lineWidth = 1;
-      c.stroke();
+      const [bx, by] = this.P(x, y, z);
+      const [tx, ty] = this.P(x, y, z + h);
+      const w = this.TW * 0.07;
+      c.fillStyle = 'rgba(30,30,60,0.2)';
+      c.beginPath(); c.ellipse(bx, by, w * 1.8, w * 0.8, 0, 0, Math.PI * 2); c.fill();
+      c.lineWidth = Math.max(1, this.TW * 0.012);
+      const legs = [[-w, w * 0.25], [w, w * 0.25]];
+      const steps = 6;
+      for (let i = 0; i < steps; i++) {
+        const k0 = i / steps, k1 = (i + 1) / steps;
+        const y0 = by + (ty - by) * k0, y1 = by + (ty - by) * k1;
+        const s0 = 1 - k0 * 0.55, s1 = 1 - k1 * 0.55;
+        c.strokeStyle = i % 2 ? '#ffffff' : '#e8553d';
+        c.beginPath();
+        c.moveTo(bx + legs[0][0] * s0, y0); c.lineTo(bx + legs[0][0] * s1, y1);
+        c.moveTo(bx + legs[1][0] * s0, y0); c.lineTo(bx + legs[1][0] * s1, y1);
+        c.moveTo(bx + legs[0][0] * s0, y0); c.lineTo(bx + legs[1][0] * s1, y1);
+        c.moveTo(bx + legs[1][0] * s0, y0); c.lineTo(bx + legs[0][0] * s1, y1);
+        c.stroke();
+      }
+      c.fillStyle = '#4a4f6a';
+      c.beginPath(); c.ellipse(tx, ty, w * 0.75, w * 0.35, 0, 0, Math.PI * 2); c.fill();
+      const on = Math.sin(this.now / 300) > 0;
+      c.fillStyle = on ? '#ff4a3a' : '#7a2a24';
+      c.beginPath(); c.arc(tx, ty - w * 0.45, w * 0.35, 0, Math.PI * 2); c.fill();
+      if (on) {
+        c.fillStyle = 'rgba(255,90,70,0.35)';
+        c.beginPath(); c.arc(tx, ty - w * 0.45, w * 0.9, 0, Math.PI * 2); c.fill();
+      }
+      return [tx, ty];
+    }
+
+    // Airship moored to the mast: striped envelope, fins, gondola with windows and a spinning propeller.
+    drawBlimp(sx, sy) {
+      const c = this.ctx;
+      const L = this.TW * 0.62, H = this.TW * 0.2;
+      const now = this.now;
+      c.save();
+      c.translate(sx, sy);
+      c.rotate(Math.sin(now / 1700) * 0.05);
+      // Tail fins (tail on the left).
+      const fin = (pts, col) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.fillStyle = col; c.fill(); c.strokeStyle = 'rgba(30,40,90,0.35)'; c.lineWidth = 1; c.stroke(); };
+      fin([[-L * 0.32, -H * 0.4], [-L * 0.58, -H * 1.25], [-L * 0.62, -H * 1.2], [-L * 0.52, -H * 0.2]], '#e8553d');
+      fin([[-L * 0.32, H * 0.4], [-L * 0.58, H * 1.2], [-L * 0.62, H * 1.15], [-L * 0.52, H * 0.2]], '#c9432c');
+      // Envelope.
+      const g = c.createLinearGradient(0, -H, 0, H);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(0.45, '#e6eefb');
+      g.addColorStop(1, '#93add8');
+      c.fillStyle = g;
+      c.beginPath(); c.ellipse(0, 0, L * 0.5, H, 0, 0, Math.PI * 2); c.fill();
+      c.save();
+      c.clip();
+      // Red tail band and nose cap.
       c.fillStyle = '#e8553d';
-      c.fillRect(sx - w * 0.12, sy + h * 0.9, w * 0.24, h * 0.45);
+      c.fillRect(-L * 0.36, -H, L * 0.07, H * 2);
+      c.fillStyle = '#ffc53d';
+      c.fillRect(-L * 0.27, -H, L * 0.03, H * 2);
+      c.fillStyle = 'rgba(232,85,61,0.9)';
+      c.beginPath(); c.ellipse(L * 0.5, 0, L * 0.07, H, 0, 0, Math.PI * 2); c.fill();
+      // Panel seams.
+      c.strokeStyle = 'rgba(40,60,120,0.18)';
+      c.lineWidth = 1;
+      for (let i = -2; i <= 2; i++) {
+        c.beginPath(); c.ellipse(i * L * 0.11, 0, L * 0.025, H, 0, 0, Math.PI * 2); c.stroke();
+      }
+      c.beginPath(); c.moveTo(-L * 0.5, 0); c.lineTo(L * 0.5, 0); c.stroke();
+      c.restore();
+      c.strokeStyle = 'rgba(30,40,90,0.4)';
+      c.lineWidth = 1.2;
+      c.beginPath(); c.ellipse(0, 0, L * 0.5, H, 0, 0, Math.PI * 2); c.stroke();
+      // Highlight.
+      c.fillStyle = 'rgba(255,255,255,0.75)';
+      c.beginPath(); c.ellipse(-L * 0.05, -H * 0.55, L * 0.28, H * 0.16, -0.05, 0, Math.PI * 2); c.fill();
+      // Lettering.
+      if (this.TW > 60) {
+        c.font = `${Math.round(H * 0.62)}px ${this.fonts.display}`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillStyle = '#2f4a8a';
+        c.fillText('ATLAS', L * 0.07, H * 0.12);
+      }
+      // Gondola with windows, hung on struts.
+      c.strokeStyle = 'rgba(40,40,70,0.6)';
+      c.beginPath(); c.moveTo(-L * 0.08, H * 0.9); c.lineTo(-L * 0.06, H * 1.25); c.moveTo(L * 0.1, H * 0.9); c.lineTo(L * 0.08, H * 1.25); c.stroke();
+      c.fillStyle = '#3c4a7a';
+      c.beginPath(); c.roundRect(-L * 0.11, H * 1.15, L * 0.24, H * 0.5, H * 0.18); c.fill();
+      c.fillStyle = '#ffd56b';
+      for (let i = 0; i < 3; i++) {
+        c.beginPath(); c.roundRect(-L * 0.08 + i * L * 0.065, H * 1.25, L * 0.04, H * 0.22, 2); c.fill();
+      }
+      // Propeller at the back of the gondola.
+      const spin = Math.abs(Math.sin(now / 40));
+      c.fillStyle = 'rgba(60,60,80,0.55)';
+      c.beginPath(); c.ellipse(-L * 0.14, H * 1.4, H * 0.08, H * 0.35 * (0.3 + spin * 0.7), 0, 0, Math.PI * 2); c.fill();
+      c.restore();
     }
 
     // Glossy board-game pawn: weighted base, waisted body, collar and a shiny head.
@@ -1057,7 +1146,8 @@
       const [sx, sy] = this.P(cx + 0.24, cy + 0.24, z);
       const big = this.TW >= 58;
       const name = this.nameOf ? this.nameOf(t.id) : t.name;
-      const fs = Math.max(8, Math.min(13, this.TW * 0.105));
+      const fs = Math.max(8, Math.min(14, this.TW * 0.11));
+      const pf = Math.max(11, Math.min(20, this.TW * 0.165));
       if (t.id % 8 === 0) {
         if (big) {
           c.lineWidth = 3;
@@ -1072,26 +1162,31 @@
       }
       let value = null;
       // On small boards only rents are shown; prices are one tap away in the tile card.
-      if (t.type === 'city' || t.type === 'resort') value = owner ? g.rent(t) : this.TW >= 50 ? t.price : null;
-      const pillY = big ? sy + fs * 0.55 : sy;
+      if (t.type === 'city' || t.type === 'resort') value = owner ? g.rent(t) : this.TW >= 42 ? t.price : null;
+      const pillY = big ? sy + pf * 0.62 : sy;
       if (big) {
         c.lineWidth = 3;
         c.strokeStyle = 'rgba(255,250,240,0.9)';
         c.font = `600 ${Math.round(fs)}px ${this.fonts.body}`;
         c.textAlign = 'center';
         c.textBaseline = 'middle';
-        c.strokeText(name, sx, sy - fs * 0.6);
-        this.text(name, sx, sy - fs * 0.6, fs, '#232845', this.fonts.body, 600);
+        c.strokeText(name, sx, sy - pf * 0.55);
+        this.text(name, sx, sy - pf * 0.55, fs, '#232845', this.fonts.body, 600);
       }
       if (value != null) {
         const label = '$' + value.toLocaleString('en-US');
-        c.font = `700 ${Math.round(fs * 0.92)}px ${this.fonts.body}`;
-        const w = c.measureText(label).width + fs * 0.9, h = fs * 1.35;
-        c.fillStyle = owner ? owner.color : 'rgba(35,40,69,0.82)';
-        c.beginPath();
-        c.roundRect(sx - w / 2, pillY - h / 2, w, h, h / 2);
-        c.fill();
-        this.text(label, sx, pillY + 0.5, fs * 0.92, '#ffffff', this.fonts.body, 700);
+        c.font = `${Math.round(pf)}px ${this.fonts.display}`;
+        const w = c.measureText(label).width + pf * 0.9, h = pf * 1.3;
+        // Pill with a darker lip and a white rim so it reads on any tile colour.
+        const fill = owner ? owner.color : '#2b3157';
+        c.fillStyle = shade(fill.startsWith('#') ? fill : '#2b3157', -0.35);
+        c.beginPath(); c.roundRect(sx - w / 2, pillY - h / 2 + 2, w, h, h / 2); c.fill();
+        c.fillStyle = fill;
+        c.beginPath(); c.roundRect(sx - w / 2, pillY - h / 2, w, h, h / 2); c.fill();
+        c.strokeStyle = 'rgba(255,255,255,0.9)';
+        c.lineWidth = 1.5;
+        c.stroke();
+        this.text(label, sx, pillY + 1, pf, '#ffffff', this.fonts.display);
       }
     }
 

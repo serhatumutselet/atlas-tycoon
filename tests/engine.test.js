@@ -105,3 +105,11 @@ test('bot-only games always finish and keep invariants', async () => {
   }
   console.log('win reasons over 300 games:', reasons);
 });
+
+test('timeout answers roll the dice and pass on everything else', () => {
+  assert.strictEqual(Game.timeoutAnswer({ type: 'roll' }), true);
+  assert.strictEqual(Game.timeoutAnswer({ type: 'buy', options: [{ level: 0, cost: 60 }] }), -1);
+  assert.strictEqual(Game.timeoutAnswer({ type: 'buyout' }), false);
+  assert.strictEqual(Game.timeoutAnswer({ type: 'island' }), 'roll');
+  assert.strictEqual(Game.timeoutAnswer({ type: 'worldTour', choices: [1, 2] }), -1);
+});

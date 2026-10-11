@@ -1,4 +1,5 @@
 process.env.ATLAS_PACE = '0';
+process.env.ATLAS_TURN_SECONDS = '0.3';
 const test = require('node:test');
 const assert = require('node:assert');
 const { server } = require('../server/server.js');
@@ -80,4 +81,24 @@ test('an online game runs to the end with a human answering requests', async () 
   });
   assert.ok(over, 'game over received');
   assert.ok(requests > 10 && events > 50);
+});
+
+test('a connected player who does not answer is rolled for and then passes', async () => {
+  const host = await post('rooms', { name: 'Idle' });
+  const { code, token } = host.body;
+  await post(`rooms/${code}/bot`, { token, add: true });
+  let started = false, rolled = false, bought = false, requests = 0;
+  await listen(code, token, async (msg) => {
+    if (msg.kind === 'hello' && !started) {
+      started = true;
+      await post(`rooms/${code}/start`, { token });
+    }
+    if (msg.kind === 'request') requests++;
+    if (msg.kind === 'event' && msg.evt.type === 'dice' && msg.evt.playerId === 0) rolled = true;
+    if (msg.kind === 'event' && msg.evt.type === 'log' && /^l_buy/.test(msg.evt.key) && msg.evt.params.p === 'Idle') bought = true;
+    // Stop once the idle player has been asked a few times.
+    return requests >= 4;
+  });
+  assert.ok(rolled, 'dice were rolled automatically');
+  assert.ok(!bought, 'nothing was bought on timeout');
 });

@@ -20,7 +20,7 @@ npm start
 
 Then open http://localhost:5178.
 
-- **Online:** "Create online room" gives you a 5-letter code and an invite link. Friends join with the code, and the host can fill empty seats with bots. If a player disconnects or takes longer than 45 seconds, a bot plays for them until they come back. Reloading the tab rejoins the same seat.
+- **Online:** "Create online room" gives you a 5-letter code and an invite link. Friends join with the code, and the host can fill empty seats with bots. If a player disconnects, a bot plays for them until they come back. Reloading the tab rejoins the same seat.
 - **On this device:** 2–4 seats, each one a human (pass the device around) or a bot.
 
 To play over the internet, run the server on any Node host (Render, Fly.io, Railway, a VPS), or expose your machine with a tunnel such as `cloudflared tunnel --url http://localhost:5178`. The port comes from `PORT`.
@@ -34,6 +34,7 @@ Pinch or scroll to zoom the board, drag to move it, and double-click to reset. T
 - When you land on a rival's city, pay the rent, then you may **buy it out** for twice its value.
 - Owning a whole region doubles rent there. The **Grand Gala** doubles one property's rent again.
 - **Airship Dock**: pay $50 to fly anywhere. Landing exactly on **Departure** gives you a free upgrade.
+- Every decision has a 10-second clock, shown on the player's card. When time runs out the dice roll by themselves and any other choice is skipped.
 - You win with a Triple Monopoly (three full regions), a Line Monopoly (every property on one side), a Resort Monopoly (all four resorts), by being the last player standing, or by being the richest when the round limit runs out.
 
 ## Code

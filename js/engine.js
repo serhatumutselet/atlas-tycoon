@@ -60,6 +60,18 @@
       this.winReason = s.winReason;
     }
 
+    // Answer used when a human runs out of time: roll the dice, skip everything else.
+    static timeoutAnswer(req) {
+      switch (req.type) {
+        case 'roll': return true;
+        case 'island': return 'roll';
+        case 'resort':
+        case 'buyout': return false;
+        case 'earthquake': return req.choices[0];
+        default: return -1;
+      }
+    }
+
     // Replaces player/tile object references with ids so a message can be sent as JSON.
     static pack(obj) {
       const out = {};

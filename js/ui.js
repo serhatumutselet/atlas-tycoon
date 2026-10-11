@@ -33,6 +33,8 @@
   let lastCash = [];
   let chipDeltas = [];
   let promptState = null; // { resolve, reqId, pick }
+  let turnClock = null; // { pid, deadline, total } shown as a bar on that player's card
+  const DECISION_MS = 10000;
   let pinnedInfo = -1;
 
   const speed = () => (session && session.kind === 'local' ? Number($('#speed').value) || 1 : 1);
@@ -129,6 +131,7 @@
 
   function enterGame(v) {
     view = v;
+    turnClock = null;
     levels = view.tiles.map((x) => x.level);
     lastCash = view.players.map((p) => p.cash);
     chipDeltas = [];
@@ -249,6 +252,7 @@
       case 'requestDone':
         if (promptState && promptState.reqId === msg.reqId) closePrompt();
         if (s.waiting === msg.reqId) { s.waiting = null; setStatus(''); }
+        stopClock();
         break;
       case 'error': toast(msg.message); break;
     }
@@ -263,6 +267,7 @@
   function onRequest(s, msg) {
     const p = view.players[msg.seat];
     const req = view.unpack(msg.req);
+    startClock(msg.seat, msg.deadline);
     if (msg.seat === s.seat) {
       prompt(p, req, msg.reqId, msg.deadline).then((value) => {
         if (value === undefined) return;
@@ -270,7 +275,7 @@
       });
     } else {
       s.waiting = msg.reqId;
-      setStatus(`<p class="wait"><span class="pawn-dot" style="--pc:${p.color}"></span><span>${t('w_' + req.type, { p: `<b>${esc(p.name)}</b>` })}</span></p>${timerBar(msg.deadline)}`);
+      setStatus(`<p class="wait"><span class="pawn-dot" style="--pc:${p.color}"></span><span>${t('w_' + req.type, { p: `<b>${esc(p.name)}</b>` })}</span></p>`);
     }
   }
 
@@ -503,7 +508,8 @@
         <span class="chip-cash">${p.bankrupt ? t('bankrupt') : fmt(p.cash)}</span>
         <span class="chip-meta">${t('props', { n: props })} · ${t('lap', { n: p.laps + 1 })}</span>
         ${badges.length ? `<span class="badges">${badges.map((b) => `<span class="badge">${b}</span>`).join('')}</span>` : ''}</span>
-        ${p === current && !view.winner ? `<span class="turn-tag">${t('turnTag')}</span>` : ''}`;
+        ${p === current && !view.winner ? `<span class="turn-tag">${t('turnTag')}</span>` : ''}
+        ${turnClock && turnClock.pid === p.id ? clockBar() : ''}`;
       chip.title = t('worth', { m: view.netWorth(p) });
       const delta = p.cash - (lastCash[i] != null ? lastCash[i] : p.cash);
       if (delta) chipDeltas[i] = { v: delta, at: performance.now() };
@@ -520,6 +526,23 @@
       box.appendChild(chip);
     });
     $('#round').textContent = view.rules.maxRounds < 999 ? t('roundOf', { n: Math.min(view.round, view.rules.maxRounds), max: view.rules.maxRounds }) : t('round', { n: view.round });
+  }
+
+  // Time bar on the acting player's card; the negative delay resumes it across re-renders.
+  function clockBar() {
+    const elapsed = Math.max(0, turnClock.total - (turnClock.deadline - Date.now()));
+    return `<span class="chip-timer"><i style="animation-duration:${turnClock.total}ms;animation-delay:-${Math.round(elapsed)}ms"></i></span>`;
+  }
+
+  function startClock(pid, deadline) {
+    turnClock = { pid, deadline, total: DECISION_MS };
+    renderHud();
+  }
+
+  function stopClock() {
+    if (!turnClock) return;
+    turnClock = null;
+    renderHud();
   }
 
   function onHover(id) {
@@ -588,16 +611,12 @@
     $('#stage').hidden = !html;
   }
 
-  function timerBar(deadline) {
-    if (!deadline) return '';
-    const left = Math.max(0, deadline - Date.now());
-    return `<div class="timer"><i style="animation-duration:${left}ms"></i></div>`;
-  }
-
   function closePrompt() {
     if (!promptState) return;
     const ps = promptState;
     promptState = null;
+    clearTimeout(ps.timer);
+    if (session && session.kind === 'local') stopClock();
     board.setPickable(null);
     setDecide('');
     setStatus('');
@@ -608,6 +627,8 @@
     const ps = promptState;
     if (!ps) return;
     promptState = null;
+    clearTimeout(ps.timer);
+    stopClock();
     board.setPickable(null);
     setDecide('');
     setStatus('');
@@ -640,6 +661,11 @@
     return new Promise((resolve) => {
       if (promptState) closePrompt();
       promptState = { resolve, reqId };
+      if (session.kind === 'local') {
+        deadline = Date.now() + DECISION_MS;
+        promptState.timer = setTimeout(() => finishPrompt(Game.timeoutAnswer(req)), DECISION_MS);
+        startClock(p.id, deadline);
+      }
       const x = req.tile;
       const cash = `<p class="cash-left">${t('cashLeft', { m: p.cash })}</p>`;
       let html = '';
@@ -717,13 +743,13 @@
         if (board.autoCam) board.overview(true);
         pinnedInfo = -1;
         $('#info').hidden = true;
-        setStatus(`<p class="pick-text">${pickText}</p><div class="btns"></div>${timerBar(deadline)}`);
+        setStatus(`<p class="pick-text">${pickText}</p><div class="btns"></div>`);
         if (cancel) makeButtons($('#action .btns'), [{ label: cancel, value: -1, ghost: true }]);
         return;
       }
       setStatus('');
       $('#decide').style.setProperty('--pc', p.color);
-      setDecide(`<div class="ask">${html}</div><div class="opts"></div><div class="btns"></div>${timerBar(deadline)}`);
+      setDecide(`<div class="ask">${html}</div><div class="opts"></div><div class="btns"></div>`);
       makeButtons($('#decide .opts'), buttons.filter((b) => b.option));
       makeButtons($('#decide .btns'), buttons.filter((b) => !b.option));
       const first = $('#decide .primary') || $('#decide button');

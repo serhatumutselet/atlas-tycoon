@@ -21,6 +21,7 @@
       'A whole region doubles its rent. The <b>Grand Gala</b> doubles one property\'s rent again.',
       '<b>Airship Dock</b>: pay $50 to fly anywhere. Landing exactly on <b>Departure</b> gives a free upgrade.',
       'Win with three full regions, every property on one side, all four resorts, or by being the last one standing.',
+      'You have 10 seconds for every decision. When time runs out your dice roll by themselves and other choices are skipped.',
       'Pinch or scroll to zoom the board, drag to move it, double-click to reset. Tap any tile for its details.',
     ],
     // local setup
@@ -96,6 +97,7 @@
       'Bir bölgenin tamamına sahip olmak kirayı ikiye katlar. <b>Büyük Gala</b> bir mülkün kirasını bir kez daha katlar.',
       '<b>Zeplin İskelesi</b>: $50 öde, istediğin kareye uç. <b>Başlangıç</b> karesine tam gelirsen bedava yükseltme kazanırsın.',
       'Üç bölgenin tamamı, bir kenarın bütün mülkleri, dört tatil yerinin hepsi ya da herkes iflas edince ayakta kalmak kazandırır.',
+      'Her karar için 10 saniyen var. Süre dolarsa zarın kendiliğinden atılır, diğer seçimler pas geçilir.',
       'Tahtayı iki parmakla ya da tekerlekle yakınlaştır, sürükleyerek kaydır, çift tıklayıp sıfırla. Detaylar için bir kareye dokun.',
     ],
     back: '← Geri', localTitle: 'Bu cihazda oyna', localLede: 'Cihazı elden ele dolaştır ya da boş koltuklara bot koy.',

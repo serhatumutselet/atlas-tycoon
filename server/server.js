@@ -10,7 +10,8 @@ const AI = require('../js/ai.js');
 
 const PORT = Number(process.env.PORT) || 5178;
 const ROOT = path.resolve(__dirname, '..');
-const TURN_SECONDS = 45;
+// Seconds a human has for each decision before the dice roll themselves or the choice is skipped.
+const TURN_SECONDS = process.env.ATLAS_TURN_SECONDS != null ? Number(process.env.ATLAS_TURN_SECONDS) : 10;
 // Multiplier for pacing delays (tests set ATLAS_PACE=0).
 const PACE = process.env.ATLAS_PACE != null ? Number(process.env.ATLAS_PACE) : 1;
 const MAX_PLAYERS = 4;
@@ -121,10 +122,12 @@ function decide(room, p, req) {
       broadcast(room, { kind: 'requestDone', reqId });
       resolve(value);
     };
-    // Disconnected or slow players are played by the bot so the table never stalls.
+    // Disconnected players are played by the bot; connected players who run out of time
+    // roll automatically and pass on everything else.
     const autopilot = () => finish(AI.decide(p, req, room.game));
+    const timeout = () => finish(Game.timeoutAnswer(req));
     pending.resolve = finish;
-    pending.timer = setTimeout(autopilot, seat.connected > 0 ? TURN_SECONDS * 1000 : 1500);
+    pending.timer = seat.connected > 0 ? setTimeout(timeout, TURN_SECONDS * 1000) : setTimeout(autopilot, 1500);
     pending.autopilot = autopilot;
     room.pending = pending;
     broadcast(room, { kind: 'request', reqId, seat: p.id, req: pending.req, deadline });

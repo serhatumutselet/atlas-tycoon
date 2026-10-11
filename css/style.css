@@ -523,3 +523,20 @@ input, select {
 .cube .core.f5 { transform: rotateY(-90deg) translateZ(calc(var(--half) - 3px)); }
 .cube .core.f3 { transform: rotateX(90deg) translateZ(calc(var(--half) - 3px)); }
 .cube .core.f4 { transform: rotateX(-90deg) translateZ(calc(var(--half) - 3px)); }
+
+/* Decision clock on the acting player's card */
+.chip-timer {
+  position: absolute; left: 12px; right: 12px; bottom: 5px; height: 5px; border-radius: 5px; overflow: hidden;
+  background: color-mix(in srgb, var(--pc) 20%, rgba(0, 0, 0, 0.1));
+}
+.chip-timer i {
+  display: block; height: 100%; border-radius: inherit; transform-origin: left; background: var(--pc);
+  animation-name: clock; animation-timing-function: linear; animation-fill-mode: forwards;
+}
+@keyframes clock {
+  0% { transform: scaleX(1); }
+  65% { background: var(--pc); }
+  70% { background: #ff9f1a; }
+  100% { transform: scaleX(0); background: #e5321f; }
+}
+.chip:has(.chip-timer) { padding-bottom: 16px; }
