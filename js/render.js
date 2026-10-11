@@ -99,23 +99,49 @@
       if (!tk) return;
       if (jump || this.reduced) {
         const [x, y] = this.slotPos(path[path.length - 1], pid);
-        await this.tween(320, (k) => { tk.z = 2.4 * (1 - ease(k)); tk.x = x; tk.y = y; });
+        await this.tween(520, (k) => { tk.z = 2.4 * (1 - ease(k)); tk.x = x; tk.y = y; });
         tk.z = 0;
         return;
       }
       for (const pos of path) {
         const [x, y] = this.slotPos(pos, pid);
         const sx = tk.x, sy = tk.y;
-        await this.tween(140, (k) => {
+        await this.tween(230, (k) => {
           tk.x = sx + (x - sx) * k;
           tk.y = sy + (y - sy) * k;
-          tk.z = Math.sin(Math.PI * k) * 0.45;
+          tk.z = Math.sin(Math.PI * k) * 0.55;
         });
         tk.z = 0;
       }
     }
 
     hideToken(pid) { if (this.tokens[pid]) this.tokens[pid].alpha = 0; }
+
+    // Renders one building (or a bare plot) on a tile, in this board's own style, as an image URL.
+    buildingImage(level, color, px) {
+      const key = level + color + px;
+      this.imgCache = this.imgCache || {};
+      if (this.imgCache[key]) return this.imgCache[key];
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = px * 2;
+      const keep = { ctx: this.ctx, TW: this.TW, TH: this.TH, ZS: this.ZS, ox: this.ox, oy: this.oy, now: this.now };
+      const c = cv.getContext('2d');
+      c.scale(2, 2);
+      this.ctx = c;
+      // Scale each picture so its building fills the frame (taller levels get a smaller tile).
+      const tallest = [0.75, 0.8, 1.15, 1.45, 2.15][level];
+      this.TW = Math.min(px * 0.92, (px - 12) / (0.5 + 0.55 * tallest));
+      this.TH = this.TW / 2;
+      this.ZS = this.TW * 0.55;
+      this.ox = px / 2;
+      this.oy = px - this.TH - 6;
+      this.now = 0;
+      this.box(0, 0, 1, 1, 0, TILE_Z, mix('#fffaf0', color, 0.22), shade(color, -0.05), shade(color, -0.3), 'rgba(60,40,20,0.25)');
+      this.drawBuilding(level, 0.38, 0.38, TILE_Z, color, 1, 7);
+      Object.assign(this, keep);
+      this.imgCache[key] = cv.toDataURL();
+      return this.imgCache[key];
+    }
 
     markGrow(tileId) { this.grow[tileId] = performance.now(); }
 
@@ -212,7 +238,8 @@
       this.fullView = !!full;
     }
 
-    get portrait() { return this.W / this.H < 0.8; }
+    // Phones in either orientation: the whole board would be too small to read.
+    get small() { return this.W / this.H < 0.8 || this.W < 640 || this.H < 520; }
 
     setAutoCam(on) {
       this.autoCam = on;
@@ -230,18 +257,28 @@
       const cam = this.cam, b = this.base;
       let tz = 1, tx = 0, ty = 0;
       // On tall phone screens the whole board is tiny, so "overview" frames the active pawn instead.
-      const near = this.camGoal === 'overview' && !this.fullView && this.portrait && this.autoCam && this.tokens[this.active];
+      const near = this.camGoal === 'overview' && !this.fullView && this.small && this.autoCam && this.tokens[this.active];
       const tk = near ? this.tokens[this.active] : this.tokens[this.followId];
       if ((this.camGoal === 'follow' || near) && tk) {
-        tz = near ? 1.65 : this.W < 640 ? 2.2 : 1.5;
+        tz = near ? 2.3 : this.small ? 2.7 : 1.5;
         const cx = this.W / 2, cy = this.H / 2;
         const bx = b.ox + (tk.x - tk.y) * b.tw / 2;
         const by = b.oy + (tk.x + tk.y) * b.tw / 4 - (TILE_Z + 0.4) * b.tw * 0.55;
         tx = cx - cx - (bx - cx) * tz;
         // Keep the pawn in the upper part of the screen so the decision card below it doesn't cover it.
         ty = this.H * (near ? 0.45 : this.W < 640 ? 0.25 : 0.3) - cy - (by - cy) * tz;
+        // Don't leave empty sky beside the board: pull its corners back to the screen edges.
+        const sx = (wx) => cx + (b.ox + wx * b.tw / 2 - cx) * tz + tx;
+        const sy = (wy) => cy + (b.oy + wy * b.tw / 4 - cy) * tz + ty;
+        const left = sx(-9.9), right = sx(9.9), top = sy(-0.9), front = sy(18.9);
+        if (right - left > this.W) {
+          if (left > 0) tx -= left;
+          else if (right < this.W) tx += this.W - right;
+        }
+        if (front < this.H * 0.86) ty += this.H * 0.86 - front;
+        else if (top > this.H * 0.12) ty -= Math.min(top - this.H * 0.12, front - this.H * 0.86);
       }
-      const k = this.reduced ? 1 : 1 - Math.exp(-Math.min(dt, 100) / 260);
+      const k = this.reduced ? 1 : 1 - Math.exp(-Math.min(dt, 100) / 420);
       cam.z += (tz - cam.z) * k;
       cam.x += (tx - cam.x) * k;
       cam.y += (ty - cam.y) * k;
@@ -666,7 +703,7 @@
           if (!owner) return;
           const col = owner.color;
           const t0 = this.grow[t.id];
-          const k = t0 ? Math.min(1, (now - t0) / 500) : 1;
+          const k = t0 ? Math.min(1, (now - t0) / 850) : 1;
           const s = t0 && k < 1 ? Math.max(0.05, easeBack(k)) : 1;
           this.drawBuilding(t.level, bx, by, z, col, s, t.id);
           if (g.festival === t.id) this.drawStar(bx, by, z + [0.7, 0.75, 1.15, 1.35, 2.0][t.level] * s, 0.13);
@@ -1194,9 +1231,9 @@
 
     drawFloats(now) {
       const c = this.ctx;
-      this.floats = this.floats.filter((f) => now - f.t0 < 1400);
+      this.floats = this.floats.filter((f) => now - f.t0 < 2000);
       for (const f of this.floats) {
-        const k = (now - f.t0) / 1400;
+        const k = (now - f.t0) / 2000;
         const [sx, sy] = this.P(f.x, f.y, TILE_Z + 0.9 + k * 0.9);
         c.globalAlpha = 1 - Math.pow(k, 2);
         c.font = `${Math.round(Math.max(13, this.TW * 0.16))}px ${this.fonts.display}`;

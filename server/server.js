@@ -110,7 +110,7 @@ async function onEvent(room, evt) {
 
 function decide(room, p, req) {
   const seat = room.seats[p.id];
-  if (seat.isBot) return sleep(req.type === 'roll' ? 400 : 700).then(() => AI.decide(p, req, room.game));
+  if (seat.isBot) return sleep(req.type === 'roll' ? 650 : 1000).then(() => AI.decide(p, req, room.game));
   return new Promise((resolve) => {
     const reqId = crypto.randomBytes(6).toString('hex');
     const deadline = Date.now() + TURN_SECONDS * 1000;

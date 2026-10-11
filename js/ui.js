@@ -111,11 +111,11 @@
       rules: { maxRounds: Number($('#maxRounds').value) },
       decide: async (p, req) => {
         if (p.isBot) {
-          await wait(req.type === 'roll' ? 350 : 650);
+          await wait(req.type === 'roll' ? 600 : 1000);
           const a = AI.decide(p, req, game);
           if (['worldTour', 'festival', 'startUpgrade', 'earthquake'].includes(req.type) && a >= 0) {
-            board.flash(a, 700 * speed());
-            await wait(600);
+            board.flash(a, 1000 * speed());
+            await wait(900);
           }
           return a;
         }
@@ -338,7 +338,7 @@
         renderHud();
         if (!promptState) setStatus(`<p class="wait"><span class="pawn-dot" style="--pc:${p.color}"></span><span>${t('turnOf', { p: `<b>${esc(p.name)}</b>` })}</span></p>`);
         const banner = turnBanner(p);
-        if (local) await wait(p.isBot ? 450 : 650);
+        if (local) await wait(p.isBot ? 700 : 900);
         await banner;
         break;
       }
@@ -354,7 +354,7 @@
         levels[x.id] = x.level;
         renderHud();
         if (pinnedInfo === x.id) showInfo(x.id, true);
-        if (local) await wait(200);
+        if (local) await wait(350);
         break;
       }
       case 'card': await showCard(evt.card); break;
@@ -395,7 +395,7 @@
     void b.offsetWidth;
     b.classList.add('go');
     clearTimeout(turnBanner.timer);
-    turnBanner.timer = setTimeout(() => (b.hidden = true), 1100);
+    turnBanner.timer = setTimeout(() => (b.hidden = true), 1600);
     return Promise.resolve();
   }
 
@@ -429,11 +429,11 @@
       st.y = fy + 360 * (Math.ceil(st.y / 360) + 2);
       c.style.transform = `rotateX(${st.x}deg) rotateY(${st.y}deg)`;
     });
-    await new Promise((r) => setTimeout(r, 950));
+    await new Promise((r) => setTimeout(r, 1300));
     const doubles = dice[0] === dice[1];
     total.innerHTML = `<b>${dice[0] + dice[1]}</b>${doubles ? `<span>${t('doubles')}</span>` : ''}`;
     total.classList.add('show');
-    await new Promise((r) => setTimeout(r, 420));
+    await new Promise((r) => setTimeout(r, 650));
     box.hidden = true;
   }
 
@@ -463,7 +463,7 @@
       <span class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${CARD_ICONS[card.id] || CARD_ICONS.gala}</svg></span>
       <h3>${esc(title)}</h3><p>${esc(text)}</p></div>`;
     box.hidden = false;
-    await (session.kind === 'local' ? wait(1600) : new Promise((r) => setTimeout(r, 1800)));
+    await (session.kind === 'local' ? wait(2400) : new Promise((r) => setTimeout(r, 2500)));
     box.hidden = true;
   }
 
@@ -635,15 +635,6 @@
     ps.resolve(value);
   }
 
-  const LEVEL_ICONS = [
-    '<path d="M8 20V5l9 3-9 3" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
-    '<path d="M4 11l8-6 8 6v9H4z" fill="currentColor"/><rect x="10" y="14" width="4" height="6" fill="#fff" opacity=".7"/>',
-    '<rect x="7" y="3" width="10" height="18" rx="1" fill="currentColor"/><path d="M10 7h1M13 7h1M10 11h1M13 11h1M10 15h1M13 15h1" stroke="#fff" stroke-width="1.6" opacity=".8"/>',
-    '<rect x="3" y="6" width="18" height="15" rx="1" fill="currentColor"/><path d="M7 10h2M11 10h2M15 10h2M7 14h2M11 14h2M15 14h2" stroke="#fff" stroke-width="1.8" opacity=".8"/>',
-    '<path d="M12 2l3 7v12H9V9z" fill="currentColor"/><path d="M5 21h14" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="4" r="1.6" fill="#ffd23f"/>',
-  ];
-  const levelIcon = (l) => `<svg class="lvl-icon" viewBox="0 0 24 24" aria-hidden="true">${LEVEL_ICONS[l]}</svg>`;
-
   function tileHeader(x, kicker) {
     const col = x.type === 'city' ? D.GROUPS[x.group].color : '#3fb0c9';
     const sub = x.type === 'city' ? I.groupName(x.group) : t('resortTitle');
@@ -727,8 +718,9 @@
       const makeButtons = (row, list) => list.forEach((b) => {
         let btn;
         if (b.option) {
-          btn = el('button', `opt${b.primary ? ' primary' : ''}`, `${levelIcon(b.level)}<span class="opt-name">${esc(b.label)}</span>
-            <span class="opt-rent">${t('rentAfter', { m: b.rent })}</span><span class="opt-cost">${fmt(b.cost)}</span>`);
+          btn = el('button', `opt-card${b.primary ? ' primary' : ''}`, `<img src="${board.buildingImage(b.level, p.color, 150)}" alt="">
+            <span class="opt-name">${esc(b.label)}</span><span class="opt-cost">${fmt(b.cost)}</span>
+            <span class="opt-rent">${t('rentAfter', { m: b.rent })}</span>`);
         } else {
           btn = el('button', `btn${b.primary ? ' primary' : ''}${b.ghost ? ' ghost' : ''}${b.big ? ' big' : ''}`, `${esc(b.label)}${b.sub ? `<small>${b.sub}</small>` : ''}`);
         }
@@ -750,6 +742,7 @@
       setStatus('');
       $('#decide').style.setProperty('--pc', p.color);
       setDecide(`<div class="ask">${html}</div><div class="opts"></div><div class="btns"></div>`);
+      $('#decide').classList.toggle('wide', buttons.some((b) => b.option));
       makeButtons($('#decide .opts'), buttons.filter((b) => b.option));
       makeButtons($('#decide .btns'), buttons.filter((b) => !b.option));
       const first = $('#decide .primary') || $('#decide button');

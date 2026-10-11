@@ -301,9 +301,9 @@ input, select {
 /* ---------- 3D dice ---------- */
 .dice-show { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 18px; pointer-events: none; z-index: 9; }
 .dice-pair { display: flex; gap: 34px; perspective: 900px; }
-.dice-show.throw .dice-pair { animation: toss 0.95s cubic-bezier(.3, .7, .4, 1); }
+.dice-show.throw .dice-pair { animation: toss 1.3s cubic-bezier(.3, .7, .4, 1); }
 @keyframes toss { 0% { transform: translateY(160px) scale(0.6); } 45% { transform: translateY(-40px) scale(1.08); } 70% { transform: translateY(8px); } 100% { transform: none; } }
-.cube { --half: 50px; width: 100px; height: 100px; position: relative; transform-style: preserve-3d; transition: transform 0.95s cubic-bezier(.2, .8, .25, 1); }
+.cube { --half: 50px; width: 100px; height: 100px; position: relative; transform-style: preserve-3d; transition: transform 1.3s cubic-bezier(.2, .8, .25, 1); }
 .face {
   position: absolute; inset: 0; border-radius: 18%; padding: 16%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8%;
   background: radial-gradient(circle at 30% 25%, #ffffff, #eeeaf6 70%, #d9d3e8); box-shadow: inset 0 0 0 1.5px rgba(60, 50, 90, 0.18), inset 0 -6px 10px rgba(60, 50, 90, 0.12);
@@ -331,7 +331,7 @@ input, select {
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.2); transform: translateX(-50%);
 }
 .turn-banner .pawn-dot { width: 22px; height: 22px; --pc: #fff; }
-.turn-banner.go { animation: sweep 1.1s cubic-bezier(.2, .9, .3, 1) forwards; }
+.turn-banner.go { animation: sweep 1.6s cubic-bezier(.2, .9, .3, 1) forwards; }
 @keyframes sweep {
   0% { transform: translateX(-50%) translateX(-60vw) skewX(-10deg); opacity: 0; }
   22% { transform: translateX(-50%) skewX(0); opacity: 1; }
@@ -622,4 +622,39 @@ body { font-size: 16px; }
   .ticker { font-size: 13px; }
   .turn-banner { font-size: 28px; }
   .info { width: 250px; font-size: 14px; }
+}
+
+/* Horizontal purchase cards with building pictures */
+.decide.wide { width: min(840px, 100%); }
+.decide.wide .ask { grid-template-columns: 1fr; }
+.opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.opt-card {
+  display: grid; justify-items: center; gap: 2px; padding: 10px 10px 14px; border: 0; border-radius: 20px; cursor: pointer;
+  font: inherit; color: var(--ink); background: var(--panel-solid); text-align: center;
+  box-shadow: inset 0 0 0 2px var(--line), 0 4px 0 rgba(27, 33, 64, 0.14); transition: transform 0.15s, box-shadow 0.15s;
+}
+.opt-card:hover { transform: translateY(-4px); box-shadow: inset 0 0 0 3px var(--sun), 0 8px 0 rgba(27, 33, 64, 0.14), 0 14px 24px rgba(10, 20, 60, 0.18); }
+.opt-card:active { transform: translateY(1px); }
+.opt-card:focus-visible { outline: 3px solid #7fb2ff; outline-offset: 3px; }
+.opt-card.primary { background: color-mix(in srgb, var(--sun) 24%, var(--panel-solid)); box-shadow: inset 0 0 0 3px var(--sun), 0 5px 0 var(--sun-deep); }
+.opt-card img { width: 120px; height: 120px; display: block; margin-bottom: 2px; filter: drop-shadow(0 6px 8px rgba(10, 20, 60, 0.2)); }
+.opt-card .opt-name { font-weight: 700; font-size: 18px; }
+.opt-card .opt-cost { font: 400 30px/1.1 var(--display); letter-spacing: 0.02em; }
+.opt-card .opt-rent { font-size: 15px; color: var(--ink-2); }
+.decide.wide .btns { justify-content: center; }
+.decide.wide .btns .btn { flex: 0 1 260px; }
+@media (max-width: 640px) {
+  .opts { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .opt-card { padding: 8px 6px 10px; }
+  .opt-card img { width: 88px; height: 88px; }
+  .opt-card .opt-name { font-size: 15px; }
+  .opt-card .opt-cost { font-size: 22px; }
+  .opt-card .opt-rent { font-size: 13px; }
+}
+
+/* Purchase card layout: picture on top, then name, price and rent */
+.opt-card .opt-name, .opt-card .opt-cost, .opt-card .opt-rent { grid-row: auto; grid-column: auto; }
+.opt-card img { width: 150px; height: 150px; }
+@media (max-width: 640px) {
+  .opt-card img { width: 104px; height: 104px; }
 }

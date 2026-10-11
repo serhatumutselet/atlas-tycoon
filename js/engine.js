@@ -487,13 +487,13 @@
   // How long clients need to show an event; the online server waits this long between events.
   function eventDuration(e) {
     switch (e.type) {
-      case 'dice': return 1400;
-      case 'move': return e.jump ? 400 : e.path.length * 150 + 250;
-      case 'card': return 2000;
-      case 'turn': return 700;
-      case 'tile': return 350;
-      case 'bankrupt': return 900;
-      case 'money': return 80;
+      case 'dice': return 2000;
+      case 'move': return e.jump ? 650 : e.path.length * 240 + 350;
+      case 'card': return 2600;
+      case 'turn': return 1000;
+      case 'tile': return 500;
+      case 'bankrupt': return 1200;
+      case 'money': return 120;
       default: return 0;
     }
   }
