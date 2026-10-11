@@ -213,10 +213,14 @@
       this.camGoal = 'follow';
     }
 
-    overview() {
+    // full=true always shows the whole board (picking a tile, double-click, game over).
+    overview(full) {
       this.followId = -1;
       this.camGoal = 'overview';
+      this.fullView = !!full;
     }
+
+    get portrait() { return this.W / this.H < 0.8; }
 
     setAutoCam(on) {
       this.autoCam = on;
@@ -233,21 +237,23 @@
       if (!this.camGoal || !this.base) return;
       const cam = this.cam, b = this.base;
       let tz = 1, tx = 0, ty = 0;
-      const tk = this.tokens[this.followId];
-      if (this.camGoal === 'follow' && tk) {
-        tz = this.W < 640 ? 2.1 : 1.5;
+      // On tall phone screens the whole board is tiny, so "overview" frames the active pawn instead.
+      const near = this.camGoal === 'overview' && !this.fullView && this.portrait && this.autoCam && this.tokens[this.active];
+      const tk = near ? this.tokens[this.active] : this.tokens[this.followId];
+      if ((this.camGoal === 'follow' || near) && tk) {
+        tz = near ? 1.65 : this.W < 640 ? 2.2 : 1.5;
         const cx = this.W / 2, cy = this.H / 2;
         const bx = b.ox + (tk.x - tk.y) * b.tw / 2;
         const by = b.oy + (tk.x + tk.y) * b.tw / 4 - (TILE_Z + 0.4) * b.tw * 0.55;
         tx = cx - cx - (bx - cx) * tz;
         // Keep the pawn in the upper part of the screen so the decision card below it doesn't cover it.
-        ty = this.H * (this.W < 640 ? 0.25 : 0.3) - cy - (by - cy) * tz;
+        ty = this.H * (near ? 0.45 : this.W < 640 ? 0.25 : 0.3) - cy - (by - cy) * tz;
       }
       const k = this.reduced ? 1 : 1 - Math.exp(-Math.min(dt, 100) / 260);
       cam.z += (tz - cam.z) * k;
       cam.x += (tx - cam.x) * k;
       cam.y += (ty - cam.y) * k;
-      if (this.camGoal === 'overview' && Math.abs(cam.z - 1) < 0.002 && Math.abs(cam.x) < 0.5 && Math.abs(cam.y) < 0.5) {
+      if (this.camGoal === 'overview' && !near && Math.abs(cam.z - 1) < 0.002 && Math.abs(cam.x) < 0.5 && Math.abs(cam.y) < 0.5) {
         this.cam = { z: 1, x: 0, y: 0 };
         this.camGoal = null;
       }
@@ -278,7 +284,7 @@
         const [x, y] = local(e);
         this.zoomAt(x, y, this.cam.z * Math.exp(-e.deltaY * 0.0015));
       }, { passive: false });
-      cv.addEventListener('dblclick', () => this.overview());
+      cv.addEventListener('dblclick', () => this.overview(true));
       cv.addEventListener('pointerdown', (e) => {
         pts.set(e.pointerId, local(e));
         this.dragged = false;
@@ -525,7 +531,7 @@
           const t0 = this.grow[t.id];
           const k = t0 ? Math.min(1, (now - t0) / 500) : 1;
           const s = t0 && k < 1 ? Math.max(0.05, easeBack(k)) : 1;
-          this.drawBuilding(t.level, bx, by, z, col, s);
+          this.drawBuilding(t.level, bx, by, z, col, s, t.id);
           if (g.festival === t.id) this.drawStar(bx, by, z + [0.7, 0.75, 1.15, 1.35, 2.0][t.level] * s, 0.13);
           return;
         }
@@ -575,41 +581,144 @@
       }
     }
 
-    drawBuilding(level, bx, by, z, col, s) {
-      const wall = mix('#fff4e2', col, 0.18);
-      const glass = 'rgba(40,60,110,0.55)';
+    // ---------- buildings ----------
+    // Soft contact shadow, cast towards +x (light comes from the upper left of the screen).
+    groundShadow(x0, y0, x1, y1, z, h) {
+      const P = this.P.bind(this);
+      const d = Math.min(0.35, h * 0.35);
+      this.poly([P(x0, y1, z), P(x1, y1, z), P(x1 + d, y1, z), P(x1 + d, y0 + d * 0.3, z), P(x1, y0, z)], 'rgba(30,25,60,0.22)');
+    }
+
+    // Window grid on the two visible faces; some windows glow, chosen from a stable seed.
+    litWindows(x0, y0, x1, y1, z0, z1, rows, cols, seed, glass) {
+      const P = this.P.bind(this);
+      const hz = (z1 - z0) / rows;
+      const lit = (n) => ((Math.sin(seed * 12.9898 + n * 78.233) * 43758.5453) % 1 + 1) % 1 > 0.62;
+      for (let r = 0; r < rows; r++) {
+        const za = z0 + hz * (r + 0.28), zb = z0 + hz * (r + 0.78);
+        for (let k = 0; k < cols; k++) {
+          const ta = (k + 0.22) / cols, tb = (k + 0.78) / cols;
+          const ya = y0 + (y1 - y0) * ta, yb = y0 + (y1 - y0) * tb;
+          this.poly([P(x1, ya, za), P(x1, yb, za), P(x1, yb, zb), P(x1, ya, zb)], lit(r * 7 + k) ? '#ffd56b' : glass);
+          const xa = x0 + (x1 - x0) * ta, xb = x0 + (x1 - x0) * tb;
+          this.poly([P(xa, y1, za), P(xb, y1, za), P(xb, y1, zb), P(xa, y1, zb)], lit(r * 7 + k + 50) ? '#ffe28a' : glass);
+        }
+      }
+    }
+
+    // Gable roof with its ridge along x; overhangs the walls slightly.
+    gableRoof(x0, y0, x1, y1, z, h, color, wall) {
+      const P = this.P.bind(this);
+      const o = 0.04, yc = (y0 + y1) / 2, zr = z + h;
+      this.poly([P(x0 - o, y0 - o, z), P(x1 + o, y0 - o, z), P(x1 + o, yc, zr), P(x0 - o, yc, zr)], shade(color, -0.4));
+      this.poly([P(x1, y0, z), P(x1, y1, z), P(x1, yc, zr)], shade(wall, -0.2));
+      this.poly([P(x0 - o, yc, zr), P(x1 + o, yc, zr), P(x1 + o, y1 + o, z - 0.02), P(x0 - o, y1 + o, z - 0.02)], shade(color, 0.08), 'rgba(0,0,0,0.18)', 0.8);
+      // Roof tile lines.
+      for (let i = 1; i < 4; i++) {
+        const t = i / 4;
+        const a = P(x0 - o, yc + (y1 + o - yc) * t, zr - (zr - z + 0.02) * t), b = P(x1 + o, yc + (y1 + o - yc) * t, zr - (zr - z + 0.02) * t);
+        this.ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath(); this.ctx.moveTo(a[0], a[1]); this.ctx.lineTo(b[0], b[1]); this.ctx.stroke();
+      }
+    }
+
+    bush(x, y, z, r) {
+      const [sx, sy] = this.P(x, y, z);
+      const c = this.ctx, R = r * this.TW;
+      c.fillStyle = '#3f9a4f';
+      c.beginPath(); c.arc(sx, sy - R * 0.6, R, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#5cbf62';
+      c.beginPath(); c.arc(sx - R * 0.3, sy - R * 0.9, R * 0.6, 0, Math.PI * 2); c.fill();
+    }
+
+    drawBuilding(level, bx, by, z, col, s, seed) {
+      const P = this.P.bind(this);
+      const wall = mix('#fff6e8', col, 0.12);
+      const glass = 'rgba(52,78,140,0.75)';
       if (level === 0) return this.drawFlag(bx, by, z, col, 0.6 * s);
+
       if (level === 1) {
-        const r = 0.19;
-        this.box(bx - r, by - r, bx + r, by + r, z, z + 0.3 * s, wall, shade(wall, -0.06), shade(wall, -0.18));
-        this.roof(bx - r - 0.03, by - r - 0.03, bx + r + 0.03, by + r + 0.03, z + 0.3 * s, 0.25 * s, col);
+        // Villa: cream walls, door, windows, gable roof, chimney and a bush.
+        const x0 = bx - 0.22, x1 = bx + 0.2, y0 = by - 0.17, y1 = by + 0.17, h = 0.27 * s;
+        this.groundShadow(x0, y0, x1, y1, z, h + 0.2);
+        this.box(x0, y0, x1, y1, z, z + h, wall, shade(wall, -0.04), shade(wall, -0.16), 'rgba(0,0,0,0.12)');
+        const dy = (y0 + y1) / 2;
+        this.poly([P(bx - 0.05, y1, z), P(bx + 0.04, y1, z), P(bx + 0.04, y1, z + h * 0.62), P(bx - 0.05, y1, z + h * 0.62)], shade(col, -0.35));
+        this.poly([P(x0 + 0.04, y1, z + h * 0.35), P(x0 + 0.12, y1, z + h * 0.35), P(x0 + 0.12, y1, z + h * 0.75), P(x0 + 0.04, y1, z + h * 0.75)], '#9fd2ff');
+        this.poly([P(x1, dy - 0.08, z + h * 0.35), P(x1, dy + 0.06, z + h * 0.35), P(x1, dy + 0.06, z + h * 0.75), P(x1, dy - 0.08, z + h * 0.75)], '#7fb8e8');
+        this.box(x0 + 0.06, y0 + 0.04, x0 + 0.12, y0 + 0.1, z + h, z + h + 0.24 * s, '#b5654a', '#a3573e', '#8a4632');
+        this.gableRoof(x0, y0, x1, y1, z + h, 0.22 * s, col, wall);
+        this.bush(x1 + 0.08, y1 + 0.04, z, 0.06);
         return;
       }
+
       if (level === 2) {
-        const r = 0.17, h = 0.75 * s;
-        this.box(bx - r, by - r, bx + r, by + r, z, z + h, shade(col, 0.15), shade(col, -0.05), shade(col, -0.28));
-        this.windows(bx - r, by - r, bx + r, by + r, z + 0.05, z + h - 0.05, glass, 4, 2);
-        this.box(bx - r * 0.5, by - r * 0.5, bx + r * 0.5, by + r * 0.5, z + h, z + h + 0.08 * s, '#ffffff', '#e6e6e6', '#cfcfcf');
+        // Tower: dark lobby, balconies, lit windows, roof parapet and water tank.
+        const r = 0.18, h = 0.85 * s;
+        const x0 = bx - r, x1 = bx + r, y0 = by - r, y1 = by + r;
+        const body = mix('#f2f4fa', col, 0.35);
+        this.groundShadow(x0, y0, x1, y1, z, h);
+        this.box(x0, y0, x1, y1, z, z + 0.12 * s, shade(col, -0.2), shade(col, -0.35), shade(col, -0.5));
+        this.box(x0, y0, x1, y1, z + 0.12 * s, z + h, body, shade(body, -0.06), shade(body, -0.2), 'rgba(0,0,0,0.12)');
+        this.litWindows(x0, y0, x1, y1, z + 0.14 * s, z + h - 0.03, 5, 2, seed, glass);
+        for (let f = 1; f < 5; f++) {
+          const zz = z + 0.12 * s + (h - 0.12 * s) * f / 5;
+          this.poly([P(x0, y1, zz), P(x1, y1, zz), P(x1, y1 + 0.03, zz), P(x0, y1 + 0.03, zz)], 'rgba(255,255,255,0.85)');
+          this.poly([P(x1, y0, zz), P(x1, y1, zz), P(x1 + 0.03, y1, zz), P(x1 + 0.03, y0, zz)], 'rgba(255,255,255,0.6)');
+        }
+        this.box(x0 - 0.015, y0 - 0.015, x1 + 0.015, y1 + 0.015, z + h, z + h + 0.04, shade(col, 0.1), shade(col, -0.1), shade(col, -0.3));
+        const [tx, ty] = this.P(bx - 0.05, by - 0.05, z + h + 0.04);
+        const c = this.ctx, tr = this.TW * 0.05;
+        c.fillStyle = '#c9ced8';
+        c.fillRect(tx - tr, ty - tr * 1.6, tr * 2, tr * 1.6);
+        c.fillStyle = '#e3e7ef';
+        c.beginPath(); c.ellipse(tx, ty - tr * 1.6, tr, tr * 0.45, 0, 0, Math.PI * 2); c.fill();
         return;
       }
+
       if (level === 3) {
-        const rx = 0.25, ry = 0.18, h = 1.05 * s;
-        this.box(bx - rx, by - ry, bx + rx, by + ry, z, z + h, shade(col, 0.2), wall, shade(wall, -0.15));
-        this.windows(bx - rx, by - ry, bx + rx, by + ry, z + 0.05, z + h - 0.05, shade(col, -0.2), 6, 3);
-        this.box(bx - rx * 0.6, by - 0.02, bx + rx * 0.6, by + 0.02, z + h, z + h + 0.14 * s, col, shade(col, -0.1), shade(col, -0.3));
+        // Hotel: glass podium, tall slab with a window grid, rooftop sign and flag.
+        const px0 = bx - 0.3, px1 = bx + 0.28, py0 = by - 0.25, py1 = by + 0.25, ph = 0.2 * s;
+        const tx0 = bx - 0.2, tx1 = bx + 0.18, ty0 = by - 0.15, ty1 = by + 0.12, th = 1.15 * s;
+        this.groundShadow(px0, py0, px1, py1, z, th);
+        this.box(px0, py0, px1, py1, z, z + ph, wall, shade(wall, -0.06), shade(wall, -0.2), 'rgba(0,0,0,0.12)');
+        this.poly([P(px0 + 0.03, py1, z + 0.02), P(px1 - 0.03, py1, z + 0.02), P(px1 - 0.03, py1, z + ph * 0.75), P(px0 + 0.03, py1, z + ph * 0.75)], 'rgba(120,190,255,0.8)');
+        this.poly([P(px0 - 0.02, py1 + 0.06, z + ph * 0.85), P(px1 + 0.02, py1 + 0.06, z + ph * 0.85), P(px1, py1, z + ph), P(px0, py1, z + ph)], col);
+        const body = shade(col, 0.12);
+        this.box(tx0, ty0, tx1, ty1, z + ph, z + th, body, shade(col, -0.02), shade(col, -0.3), 'rgba(0,0,0,0.15)');
+        this.litWindows(tx0, ty0, tx1, ty1, z + ph + 0.03, z + th - 0.04, 8, 3, seed, 'rgba(30,45,90,0.7)');
+        this.box(tx0 + 0.04, ty1 - 0.03, tx1 - 0.04, ty1, z + th, z + th + 0.12 * s, '#ffffff', '#f4f4f4', '#dcdcdc');
+        const [sx, sy] = this.P((tx0 + tx1) / 2, ty1, z + th + 0.06 * s);
+        this.text('H', sx, sy, this.TW * 0.08, col, this.fonts.display);
+        this.drawFlag(tx1 - 0.04, ty0 + 0.04, z + th, col, 0.32 * s);
         return;
       }
-      // Landmark: stepped base, slim tower, golden spire.
-      const glow = this.ctx.createRadialGradient(...this.P(bx, by, z + 1.3 * s), 2, ...this.P(bx, by, z + 1.3 * s), this.TW * 0.6);
-      glow.addColorStop(0, 'rgba(255,220,120,0.45)');
-      glow.addColorStop(1, 'rgba(255,220,120,0)');
+
+      // Landmark: plaza, columned podium, tapering gold-trimmed tower, crown and spire, light beam.
+      const pulse = 0.75 + Math.sin(this.now / 500) * 0.25;
+      const [gx, gy] = this.P(bx, by, z + 1.4 * s);
+      const glow = this.ctx.createRadialGradient(gx, gy, 2, gx, gy, this.TW * 0.7);
+      glow.addColorStop(0, `rgba(255,214,110,${0.5 * pulse})`);
+      glow.addColorStop(1, 'rgba(255,214,110,0)');
       this.ctx.fillStyle = glow;
-      const [gx, gy] = this.P(bx, by, z + 1.3 * s);
-      this.ctx.fillRect(gx - this.TW * 0.6, gy - this.TW * 0.6, this.TW * 1.2, this.TW * 1.2);
-      this.box(bx - 0.27, by - 0.27, bx + 0.27, by + 0.27, z, z + 0.22 * s, wall, shade(wall, -0.08), shade(wall, -0.2));
-      this.box(bx - 0.16, by - 0.16, bx + 0.16, by + 0.16, z + 0.22 * s, z + 1.2 * s, shade(col, 0.1), shade(col, -0.08), shade(col, -0.32));
-      this.windows(bx - 0.16, by - 0.16, bx + 0.16, by + 0.16, z + 0.3 * s, z + 1.15 * s, 'rgba(255,240,200,0.75)', 5, 2);
-      this.roof(bx - 0.16, by - 0.16, bx + 0.16, by + 0.16, z + 1.2 * s, 0.7 * s, '#ffcf4a');
+      this.ctx.fillRect(gx - this.TW * 0.7, gy - this.TW * 0.7, this.TW * 1.4, this.TW * 1.4);
+      this.groundShadow(bx - 0.32, by - 0.32, bx + 0.32, by + 0.32, z, 1.6);
+      this.box(bx - 0.34, by - 0.34, bx + 0.34, by + 0.34, z, z + 0.06 * s, '#efe6d2', '#d9cdb4', '#c2b497');
+      const pz = z + 0.06 * s, ph = 0.24 * s;
+      this.box(bx - 0.25, by - 0.25, bx + 0.25, by + 0.25, pz, pz + ph, '#fbf4e4', '#ece0c6', '#d5c6a6', 'rgba(0,0,0,0.12)');
+      for (let i = 0; i < 4; i++) {
+        const u = -0.19 + i * 0.125;
+        this.poly([P(bx + u, by + 0.25, pz), P(bx + u + 0.04, by + 0.25, pz), P(bx + u + 0.04, by + 0.25, pz + ph), P(bx + u, by + 0.25, pz + ph)], '#ffffff');
+        this.poly([P(bx + 0.25, by + u, pz), P(bx + 0.25, by + u + 0.04, pz), P(bx + 0.25, by + u + 0.04, pz + ph), P(bx + 0.25, by + u, pz + ph)], '#efe9dc');
+      }
+      const z1 = pz + ph, z2 = z1 + 0.95 * s;
+      this.box(bx - 0.17, by - 0.17, bx + 0.17, by + 0.17, z1, z2, shade(col, 0.15), shade(col, -0.05), shade(col, -0.32), 'rgba(0,0,0,0.15)');
+      this.litWindows(bx - 0.17, by - 0.17, bx + 0.17, by + 0.17, z1 + 0.05, z2 - 0.05, 6, 2, seed, 'rgba(255,245,215,0.55)');
+      [z1 + 0.32 * s, z1 + 0.64 * s].forEach((zz) => this.box(bx - 0.19, by - 0.19, bx + 0.19, by + 0.19, zz, zz + 0.04, '#ffd75e', '#f0b532', '#d39420'));
+      this.box(bx - 0.12, by - 0.12, bx + 0.12, by + 0.12, z2, z2 + 0.14 * s, '#ffd75e', '#f0b532', '#d39420', 'rgba(120,70,0,0.25)');
+      this.roof(bx - 0.12, by - 0.12, bx + 0.12, by + 0.12, z2 + 0.14 * s, 0.6 * s, '#ffcf4a');
+      this.drawStar(bx, by, z2 + 0.8 * s, 0.07 + 0.015 * pulse);
     }
 
     drawFlag(x, y, z, col, h) {
@@ -703,39 +812,95 @@
       c.fillRect(sx - w * 0.12, sy + h * 0.9, w * 0.24, h * 0.45);
     }
 
+    // Glossy board-game pawn: weighted base, waisted body, collar and a shiny head.
     drawPawn(p, tk, i) {
       const c = this.ctx;
       const [gx, gy] = this.P(tk.x, tk.y, TILE_Z);
       const [sx, sy] = this.P(tk.x, tk.y, TILE_Z + tk.z);
-      const r = Math.max(4, this.TW * 0.075);
+      const r = Math.max(5, this.TW * 0.085);
+      const col = p.color;
       c.save();
       c.globalAlpha = tk.alpha;
-      c.fillStyle = 'rgba(0,0,0,0.22)';
-      c.beginPath(); c.ellipse(gx, gy, r * 1.2, r * 0.55, 0, 0, Math.PI * 2); c.fill();
+      // Shadow shrinks as the pawn hops.
+      const lift = Math.min(1, tk.z / 0.6);
+      c.fillStyle = `rgba(20,20,50,${0.28 - lift * 0.12})`;
+      c.beginPath(); c.ellipse(gx + r * 0.2, gy + r * 0.05, r * (1.25 - lift * 0.3), r * (0.55 - lift * 0.12), 0, 0, Math.PI * 2); c.fill();
       if (this.active === i) {
-        c.strokeStyle = 'rgba(255,255,255,0.9)';
-        c.lineWidth = 2;
-        const pr = r * (1.6 + Math.sin(this.now / 250) * 0.15);
+        const pr = r * (1.75 + Math.sin(this.now / 260) * 0.12);
+        c.strokeStyle = col;
+        c.lineWidth = 3;
+        c.globalAlpha = tk.alpha * 0.9;
         c.beginPath(); c.ellipse(gx, gy, pr, pr * 0.5, 0, 0, Math.PI * 2); c.stroke();
+        c.strokeStyle = 'rgba(255,255,255,0.9)';
+        c.lineWidth = 1.2;
+        c.beginPath(); c.ellipse(gx, gy, pr + 2.5, pr * 0.5 + 1.5, 0, 0, Math.PI * 2); c.stroke();
+        c.globalAlpha = tk.alpha;
       }
+      const outline = shade(col, -0.55);
+      // Base disc with thickness.
+      const bh = r * 0.32;
+      c.fillStyle = shade(col, -0.35);
+      c.beginPath();
+      c.ellipse(sx, sy, r * 1.05, r * 0.48, 0, 0, Math.PI);
+      c.lineTo(sx - r * 1.05, sy - bh);
+      c.ellipse(sx, sy - bh, r * 1.05, r * 0.48, 0, Math.PI, 0, true);
+      c.closePath();
+      c.fill();
+      c.fillStyle = shade(col, 0.1);
+      c.beginPath(); c.ellipse(sx, sy - bh, r * 1.05, r * 0.48, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = outline; c.lineWidth = 1; c.stroke();
+      // Body.
+      const top = sy - r * 2.15, by = sy - bh;
       const grad = c.createLinearGradient(sx - r, 0, sx + r, 0);
-      grad.addColorStop(0, shade(p.color, 0.35));
-      grad.addColorStop(1, shade(p.color, -0.25));
+      grad.addColorStop(0, shade(col, 0.45));
+      grad.addColorStop(0.45, col);
+      grad.addColorStop(1, shade(col, -0.4));
       c.fillStyle = grad;
-      c.strokeStyle = 'rgba(255,255,255,0.9)';
-      c.lineWidth = 1.5;
       c.beginPath();
-      c.moveTo(sx - r, sy);
-      c.quadraticCurveTo(sx - r * 0.95, sy - r * 1.6, sx - r * 0.35, sy - r * 2.1);
-      c.lineTo(sx + r * 0.35, sy - r * 2.1);
-      c.quadraticCurveTo(sx + r * 0.95, sy - r * 1.6, sx + r, sy);
-      c.ellipse(sx, sy, r, r * 0.45, 0, 0, Math.PI);
+      c.moveTo(sx - r * 0.82, by);
+      c.bezierCurveTo(sx - r * 0.75, by - r * 0.7, sx - r * 0.22, top + r * 0.6, sx - r * 0.3, top);
+      c.lineTo(sx + r * 0.3, top);
+      c.bezierCurveTo(sx + r * 0.22, top + r * 0.6, sx + r * 0.75, by - r * 0.7, sx + r * 0.82, by);
+      c.ellipse(sx, by, r * 0.82, r * 0.36, 0, 0, Math.PI);
       c.fill();
-      c.stroke();
+      c.strokeStyle = outline; c.lineWidth = 1; c.stroke();
+      // Highlight streak on the body.
+      c.strokeStyle = 'rgba(255,255,255,0.55)';
+      c.lineWidth = Math.max(1, r * 0.14);
+      c.lineCap = 'round';
       c.beginPath();
-      c.arc(sx, sy - r * 2.55, r * 0.72, 0, Math.PI * 2);
-      c.fill();
+      c.moveTo(sx - r * 0.5, by - r * 0.25);
+      c.quadraticCurveTo(sx - r * 0.42, by - r * 0.9, sx - r * 0.2, top + r * 0.25);
       c.stroke();
+      // Collar.
+      c.fillStyle = shade(col, 0.2);
+      c.beginPath(); c.ellipse(sx, top, r * 0.55, r * 0.22, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = outline; c.lineWidth = 1; c.stroke();
+      // Head.
+      const hy = top - r * 0.55, hr = r * 0.62;
+      const hg = c.createRadialGradient(sx - hr * 0.35, hy - hr * 0.4, hr * 0.1, sx, hy, hr);
+      hg.addColorStop(0, shade(col, 0.75));
+      hg.addColorStop(0.5, col);
+      hg.addColorStop(1, shade(col, -0.35));
+      c.fillStyle = hg;
+      c.beginPath(); c.arc(sx, hy, hr, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = outline; c.lineWidth = 1; c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.85)';
+      c.beginPath(); c.ellipse(sx - hr * 0.35, hy - hr * 0.4, hr * 0.22, hr * 0.14, -0.6, 0, Math.PI * 2); c.fill();
+      // Bobbing arrow above whoever's turn it is.
+      if (this.active === i) {
+        const ay = hy - hr - r * 0.7 - Math.abs(Math.sin(this.now / 300)) * r * 0.5;
+        c.fillStyle = col;
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(sx, ay);
+        c.lineTo(sx - r * 0.55, ay - r * 0.6);
+        c.lineTo(sx + r * 0.55, ay - r * 0.6);
+        c.closePath();
+        c.stroke();
+        c.fill();
+      }
       c.restore();
     }
 
@@ -785,7 +950,7 @@
       const owner = t.owner >= 0 ? g.players[t.owner] : null;
       const c = this.ctx;
       const [sx, sy] = this.P(cx + 0.24, cy + 0.24, z);
-      const big = this.TW >= 72;
+      const big = this.TW >= 58;
       const name = this.nameOf ? this.nameOf(t.id) : t.name;
       const fs = Math.max(8, Math.min(13, this.TW * 0.105));
       if (t.id % 8 === 0) {

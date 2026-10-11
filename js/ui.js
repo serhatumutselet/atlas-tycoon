@@ -353,7 +353,7 @@
       case 'card': await showCard(evt.card); break;
       case 'bankrupt': board.hideToken(evt.player.id); renderHud(); break;
       case 'round': renderHud(); break;
-      case 'gameOver': board.overview(); renderHud(); setStatus(''); setTimeout(() => view && showOver(evt.player, evt.reason), 700); break;
+      case 'gameOver': board.overview(true); renderHud(); setStatus(''); setTimeout(() => view && showOver(evt.player, evt.reason), 700); break;
     }
   }
 
@@ -681,7 +681,7 @@
       if (pick) {
         promptState.pick = pick;
         board.setPickable(pick);
-        if (board.autoCam) board.overview();
+        if (board.autoCam) board.overview(true);
         pinnedInfo = -1;
         $('#info').hidden = true;
         setStatus(`<p class="pick-text">${pickText}</p><div class="btns"></div>${timerBar(deadline)}`);
